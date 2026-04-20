@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}{% if package_id %}Edit Package{% else %}Create Package{% endif %} | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/packages.css') }}">
+{% endblock %}
+
+{% block sidebar_links %}
+{% include "partials/nav_superadmin.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>{% if package_id %}Edit Package{% else %}Create New Package{% endif %}</h1>
+        <p>{% if package_id %}Update package information{% else %}Add a new service package{% endif %}</p>
+    </div>
+    
+    <div class="card">
+        <form id="packageForm" class="package-form">
+            {% if package_id %}
+            <div class="form-group">
+                <label for="packageId" class="form-label">Package ID</label>
+                <input type="text" id="packageId" name="packageId" class="form-input" readonly disabled>
+                <small>Package ID is auto-generated and cannot be changed</small>
+            </div>
+            {% endif %}
+            
+            <div class="form-group">
+                <label for="packageName" class="form-label">Package Name *</label>
+                <input type="text" id="packageName" name="packageName" class="form-input" 
+                       placeholder="e.g., Economy 4, Premium 6, Luxury 8" required>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group half">
+                    <label for="maxPax" class="form-label">Max Passengers (Pax) *</label>
+                    <input type="number" id="maxPax" name="maxPax" class="form-input" 
+                           placeholder="e.g., 4" min="1" required>
+                </div>
+                
+                <div class="form-group half">
+                    <label for="maxLuggage" class="form-label">Max Luggage (Pieces) *</label>
+                    <input type="number" id="maxLuggage" name="maxLuggage" class="form-input" 
+                           placeholder="e.g., 2" min="0" required>
+                </div>
+            </div>
+            
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-save"></i> {% if package_id %}Update Package{% else %}Create Package{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const packageId = '{{ package_id }}' || null;
+    
+    // Load package data if editing
+    if (packageId) {
+        fetch(`/api/common/packages/${packageId}`)
+            .then(response => response.json())
+            .then(data => {
+                const pkg = data.package;
+                document.getElementById('packageId').value = pkg.id || '';
+                document.getElementById('packageName').value = pkg.packageName || '';
+                document.getElementById('maxPax').value = pkg.maxPax || '';
+                document.getElementById('maxLuggage').value = pkg.maxLuggage || '';
+            })
+            .catch(error => {
+                console.error('Error loading package:', error);
+                toastError('Failed to load package data', 'Error');
+            });
+    }
+    
+    // Handle form submission
+    document.getElementById('packageForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const packageName = document.getElementById('packageName').value;
+        const maxPax = parseInt(document.getElementById('maxPax').value);
+        const maxLuggage = parseInt(document.getElementById('maxLuggage').value);
+        
+        // Validation
+        if (!packageName) {
+            toastError('Please enter a package name', 'Validation Error');
+            return;
+        }
+        
+        if (isNaN(maxPax) || maxPax < 1) {
+            toastError('Max passengers must be at least 1', 'Validation Error');
+            return;
+        }
+        
+        if (isNaN(maxLuggage) || maxLuggage < 0) {
+            toastError('Max luggage cannot be negative', 'Validation Error');
+            return;
+        }
+        
+        // Disable submit button
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        
+        try {
+            let url = '/api/common/packages';
+            let method = 'POST';
+            let body = {
+                packageName: packageName,
+                maxPax: maxPax,
+                maxLuggage: maxLuggage
+            };
+            
+            if (packageId) {
+                url = `/api/common/packages/${packageId}`;
+                method = 'PUT';
+            }
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body)
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                if (!packageId) {
+                    toastSuccess(`Package created with ID: ${data.package_id}`, 'Success');
+                } else {
+                    toastSuccess(data.message || 'Package updated successfully', 'Success');
+                }
+                setTimeout(() => {
+                    window.location.href = '/packages';
+                }, 1500);
+            } else {
+                toastError(data.error || data.message || 'Failed to save package', 'Error');
+            }
+        } catch (error) {
+            console.error('Error saving package:', error);
+            toastError('An unexpected error occurred', 'Error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+    
+    // Cancel button
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+        window.location.href = '/packages';
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+# backend/decorators.py
+from functools import wraps
+from flask import session, jsonify, redirect, url_for
+
+def login_required(f):
+    """Decorator for page routes - redirects to login page"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('pages.login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def login_required_api(f):
+    """Decorator for API routes - returns JSON error"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({'message': 'Authentication required'}), 401
+        return f(*args, **kwargs)
+    return decorated_function

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}User Management | {{ session.get('role', 'User') | title }} Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/users.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/user-form.css') }}">
+<style>
+    /* Skeleton Loader Styles */
+    .skeleton-row {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .skeleton-cell {
+        background: linear-gradient(90deg, #E2E8F0 25%, #F1F5F9 50%, #E2E8F0 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 8px;
+        height: 20px;
+        display: inline-block;
+    }
+    
+    @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    /* Pagination Info */
+    .pagination-info {
+        margin-top: 1rem;
+        text-align: right;
+        font-size: 0.8rem;
+        color: #64748B;
+    }
+    
+    /* Virtual Scroll */
+    .table-responsive {
+        max-height: 600px;
+        overflow-y: auto;
+        scroll-behavior: smooth;
+    }
+</style>
+{% endblock %}
+
+{% block sidebar_links %}
+{% if session.get('role') == 'superadmin' %}
+    {% include "partials/nav_superadmin.html" %}
+{% else %}
+    {% include "partials/nav_admin.html" %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>User Management</h1>
+        <p>View and manage users</p>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="card-header-left">
+                <h3 class="card-title">All Users</h3>
+                {% if session.get('role') == 'superadmin' %}
+                <div class="filter-controls">
+                    <div class="filter-dropdown">
+                        <label for="roleFilter">Filter by role:</label>
+                        <select id="roleFilter" class="filter-select">
+                            <option value="all">All Users</option>
+                            <option value="admin">Admins</option>
+                            <option value="superadmin">Superadmins</option>
+                            <option value="customer">Customers</option>
+                        </select>
+                    </div>
+                    <div class="search-box">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="searchInput" class="search-input" placeholder="Search by name or email...">
+                        <button id="clearSearchBtn" class="clear-search-btn" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% if session.get('role') == 'superadmin' %}
+            <button class="btn btn-primary" id="addUserBtn">
+                <i class="fas fa-user-plus"></i> Add User
+            </button>
+            {% endif %}
+        </div>
+        
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Display Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <!-- Skeleton loaders will appear here -->
+                </tbody>
+            </table>
+        </div>
+        <!-- Pagination Controls -->
+        <div class="pagination-container">
+            <div class="pagination-info" id="paginationInfo"></div>
+            <div class="pagination-controls">
+                <button class="pagination-btn" id="prevPageBtn" disabled>
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span class="page-info" id="pageInfo">Page 1 of 1</span>
+                <button class="pagination-btn" id="nextPageBtn" disabled>
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prefetch data script -->
+<script>
+    // Prefetch user data for instant loading on next visit
+    if (window.location.pathname === '/users') {
+        fetch('/api/common/users')
+            .then(res => res.json())
+            .then(data => {
+                window.prefetchedUsers = data.users;
+                console.log('Prefetched user data for next load');
+            })
+            .catch(err => console.log('Prefetch failed:', err));
+    }
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/users.js') }}"></script>
+{% endblock %}

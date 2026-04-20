@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}{% if unit_id %}Edit Transport Unit{% else %}Create Transport Unit{% endif %} | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/transport-units.css') }}">
+{% endblock %}
+
+{% block sidebar_links %}
+{% include "partials/nav_superadmin.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>{% if unit_id %}Edit Transport Unit{% else %}Create New Transport Unit{% endif %}</h1>
+        <p>{% if unit_id %}Update transport unit information{% else %}Add a new vehicle to the fleet{% endif %}</p>
+    </div>
+    
+    <div class="card">
+        <form id="unitForm" class="user-form" enctype="multipart/form-data">
+            {% if unit_id %}
+            <div class="form-group">
+                <label for="unitId" class="form-label">Unit ID</label>
+                <input type="text" id="unitId" name="unitId" class="form-input" readonly disabled>
+                <small>Unit ID is auto-generated and cannot be changed</small>
+            </div>
+            {% endif %}
+            
+            <div class="form-group">
+                <label for="transportUnit" class="form-label">Transport Unit (Model) *</label>
+                <input type="text" id="transportUnit" name="transportUnit" class="form-input" 
+                       placeholder="e.g., Toyota Commuter" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="plateNumber" class="form-label">Plate Number *</label>
+                <input type="text" id="plateNumber" name="plateNumber" class="form-input" 
+                       placeholder="e.g., ABC-1234" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="color" class="form-label">Color *</label>
+                <input type="text" id="color" name="color" class="form-input" 
+                       placeholder="e.g., Red, White, Black" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="unitType" class="form-label">Unit Type *</label>
+                <select id="unitType" name="unitType" class="form-select" required>
+                    <option value="">Select type</option>
+                    <option value="Van">Van</option>
+                    <option value="SUV">SUV</option>
+                    <option value="Sedan">Sedan</option>
+                </select>
+            </div>
+            
+            <!-- Image Upload Field -->
+            <div class="form-group">
+                <label class="form-label">Unit Image</label>
+                <div class="image-upload-container">
+                    <div class="image-preview" id="imagePreview" style="display: none;">
+                        <img id="previewImg" src="#" alt="Preview">
+                        <button type="button" class="remove-image-btn" id="removeImageBtn">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="upload-area" id="uploadArea">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Click or drag image to upload</p>
+                        <small>Optional. Supports JPG, PNG, GIF, WEBP (Max 5MB)</small>
+                        <input type="file" id="image" name="image" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+            </div>
+            
+            {% if unit_id %}
+            <div class="form-group">
+                <label for="isAvailable" class="form-label">Status</label>
+                <select id="isAvailable" name="isAvailable" class="form-select">
+                    <option value="true">Available</option>
+                    <option value="false">Unavailable</option>
+                </select>
+            </div>
+            {% endif %}
+            
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-save"></i> {% if unit_id %}Update Unit{% else %}Create Unit{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const unitId = '{{ unit_id }}' || null;
+    let existingImageUrl = null;
+    let removeImage = false;
+    let selectedFile = null;  // Store selected file
+    
+    // Image upload handling
+    const uploadArea = document.getElementById('uploadArea');
+    const imageInput = document.getElementById('image');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewImg = document.getElementById('previewImg');
+    const removeImageBtn = document.getElementById('removeImageBtn');
+    
+    if (uploadArea && imageInput) {
+        uploadArea.addEventListener('click', () => {
+            console.log('Upload area clicked');
+            imageInput.click();
+        });
+        
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('drag-over');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('drag-over');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                console.log('File dropped:', file.name);
+                selectedFile = file;
+                imageInput.files = e.dataTransfer.files;
+                previewImage(file);
+            } else {
+                toastError('Please drop an image file', 'Invalid File');
+            }
+        });
+        
+        imageInput.addEventListener('change', (e) => {
+            if (imageInput.files.length > 0) {
+                const file = imageInput.files[0];
+                console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+                selectedFile = file;
+                previewImage(file);
+            }
+        });
+    }
+    
+    function previewImage(file) {
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            toastError('File size too large. Maximum 5MB allowed.', 'Error');
+            imageInput.value = '';
+            selectedFile = null;
+            return;
+        }
+        
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            toastError('Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.', 'Error');
+            imageInput.value = '';
+            selectedFile = null;
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            previewImg.src = e.target.result;
+            imagePreview.style.display = 'block';
+            uploadArea.style.display = 'none';
+            removeImage = false;
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    if (removeImageBtn) {
+        removeImageBtn.addEventListener('click', () => {
+            console.log('Remove image clicked');
+            imagePreview.style.display = 'none';
+            uploadArea.style.display = 'flex';
+            imageInput.value = '';
+            selectedFile = null;
+            removeImage = true;
+        });
+    }
+    
+    // Load unit data if editing
+    if (unitId) {
+        fetch(`/api/common/transport-units/${unitId}`)
+            .then(response => response.json())
+            .then(data => {
+                const unit = data.unit;
+                document.getElementById('unitId').value = unit.id || '';
+                document.getElementById('transportUnit').value = unit.transportUnit || '';
+                document.getElementById('plateNumber').value = unit.plateNumber || '';
+                document.getElementById('color').value = unit.color || '';
+                document.getElementById('unitType').value = unit.unitType || '';
+                if (document.getElementById('isAvailable')) {
+                    document.getElementById('isAvailable').value = unit.isAvailable ? 'true' : 'false';
+                }
+                
+                // Show existing image if any
+                existingImageUrl = unit.imageUrl;
+                if (existingImageUrl) {
+                    console.log('Existing image URL:', existingImageUrl);
+                    previewImg.src = existingImageUrl;
+                    imagePreview.style.display = 'block';
+                    uploadArea.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading unit:', error);
+                toastError('Failed to load transport unit data', 'Error');
+            });
+    }
+    
+    // Handle form submission
+    document.getElementById('unitForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData();
+        
+        const transportUnit = document.getElementById('transportUnit').value;
+        const plateNumber = document.getElementById('plateNumber').value;
+        const color = document.getElementById('color').value;
+        const unitType = document.getElementById('unitType').value;
+        
+        formData.append('transportUnit', transportUnit);
+        formData.append('plateNumber', plateNumber);
+        formData.append('color', color);
+        formData.append('unitType', unitType);
+        
+        if (unitId) {
+            const isAvailable = document.getElementById('isAvailable').value === 'true';
+            formData.append('isAvailable', isAvailable);
+            if (removeImage) {
+                formData.append('removeImage', 'true');
+            }
+        }
+        
+        // Add image if selected - USE selectedFile instead of imageInput.files
+        if (selectedFile) {
+            console.log('Adding image to formData:', selectedFile.name, 'Size:', selectedFile.size);
+            formData.append('image', selectedFile);
+        } else if (imageInput && imageInput.files.length > 0) {
+            // Fallback
+            console.log('Adding image from input:', imageInput.files[0].name);
+            formData.append('image', imageInput.files[0]);
+        } else {
+            console.log('No image selected for upload');
+        }
+        
+        // Debug: Log FormData contents
+        console.log('=== FormData Contents ===');
+        for (let pair of formData.entries()) {
+            if (pair[0] === 'image') {
+                console.log(pair[0] + ': ' + pair[1].name + ' (' + pair[1].size + ' bytes)');
+            } else {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+        }
+        
+        // Validation
+        if (!transportUnit || !plateNumber || !color || !unitType) {
+            toastError('Please fill in all required fields', 'Validation Error');
+            return;
+        }
+        
+        // Disable submit button
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        
+        try {
+            let url = '/api/common/transport-units';
+            let method = 'POST';
+            
+            if (unitId) {
+                url = `/api/common/transport-units/${unitId}`;
+                method = 'PUT';
+            }
+            
+            console.log(`Sending ${method} request to ${url}`);
+            
+            const response = await fetch(url, {
+                method: method,
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                if (!unitId) {
+                    toastSuccess(`Transport unit created with ID: ${data.unit_id}`, 'Success');
+                } else {
+                    toastSuccess(data.message || 'Transport unit updated successfully', 'Success');
+                }
+                setTimeout(() => {
+                    window.location.href = '/transport-units';
+                }, 1500);
+            } else {
+                console.error('Server error:', data);
+                toastError(data.error || data.message || 'Failed to save transport unit', 'Error');
+            }
+        } catch (error) {
+            console.error('Error saving unit:', error);
+            toastError('An unexpected error occurred: ' + error.message, 'Error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+    
+    // Cancel button
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+        window.location.href = '/transport-units';
+    });
+</script>
+{% endblock %}

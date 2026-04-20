@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}{% if user_id %}Edit User{% else %}Create User{% endif %} | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/users.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/user-form.css') }}">
+{% endblock %}
+
+{% block sidebar_links %}
+{% include "partials/nav_superadmin.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>{% if user_id %}Edit User{% else %}Create New User{% endif %}</h1>
+        <p>{% if user_id %}Update user information{% else %}Add a new user to the system{% endif %}</p>
+    </div>
+    
+    <div class="card">
+        <form id="userForm" class="user-form">
+            <div class="form-group">
+                <label for="fullName" class="form-label">Full Name *</label>
+                <input type="text" id="fullName" name="fullName" class="form-input" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email" class="form-label">Email Address *</label>
+                <input type="email" id="email" name="email" class="form-input" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="role" class="form-label">Role *</label>
+                <select id="role" name="role" class="form-select" required>
+                    <option value="customer">Customer</option>
+                    <option value="admin">Admin</option>
+                    <!-- Superadmin option is NOT shown - cannot be created or assigned -->
+                </select>
+                <small>Note: Super Admin role cannot be assigned or changed</small>
+            </div>
+            
+            {% if not user_id %}
+            <div class="form-group">
+                <label for="password" class="form-label">Password *</label>
+                <input type="password" id="password" name="password" class="form-input" required>
+                <small>Password must be at least 8 characters</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="confirmPassword" class="form-label">Confirm Password *</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" class="form-input" required>
+            </div>
+            {% endif %}
+            
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <i class="fas fa-save"></i> {% if user_id %}Update User{% else %}Create User{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const userId = '{{ user_id }}' || null;
+    let originalRole = null;  // Store original role for comparison
+    
+    // Load user data if editing
+    if (userId) {
+        fetch(`/api/common/users/${userId}`)
+            .then(response => response.json())
+            .then(data => {
+                const user = data.user;
+                document.getElementById('fullName').value = user.fullName || '';
+                document.getElementById('email').value = user.email || '';
+                originalRole = user.role || 'customer';
+                document.getElementById('role').value = originalRole;
+            })
+            .catch(error => {
+                console.error('Error loading user:', error);
+                toastError('Failed to load user data', 'Error');
+            });
+    }
+    
+    // Handle form submission
+    document.getElementById('userForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const fullName = document.getElementById('fullName').value;
+        const email = document.getElementById('email').value;
+        const role = document.getElementById('role').value;
+        
+        // Validation
+        if (!fullName || !email || !role) {
+            toastError('Please fill in all required fields', 'Validation Error');
+            return;
+        }
+        
+        if (!userId) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!password || !confirmPassword) {
+                toastError('Please enter a password', 'Validation Error');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                toastError('Passwords do not match', 'Validation Error');
+                return;
+            }
+            
+            if (password.length < 8) {
+                toastError('Password must be at least 8 characters', 'Validation Error');
+                return;
+            }
+        }
+        
+        // Disable submit button
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        
+        try {
+            let url = '/api/common/users';
+            let method = 'POST';
+            let body = {};
+            
+            if (userId) {
+                // EDIT MODE - Only send fields that changed
+                url = `/api/common/users/${userId}`;
+                method = 'PUT';
+                
+                // Always send name and email for edit
+                body.fullName = fullName;
+                body.email = email;
+                
+                // ONLY send role if it has changed (and user is superadmin)
+                // The API will check permissions, but we don't want to send it unnecessarily
+                if (originalRole && role !== originalRole) {
+                    body.role = role;
+                }
+            } else {
+                // CREATE MODE - Send all fields
+                body = {
+                    fullName: fullName,
+                    email: email,
+                    role: role,
+                    password: document.getElementById('password').value
+                };
+            }
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body)
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                toastSuccess(data.message || 'User saved successfully', 'Success');
+                setTimeout(() => {
+                    window.location.href = '/users';
+                }, 1500);
+            } else {
+                toastError(data.error || data.message || 'Failed to save user', 'Error');
+            }
+        } catch (error) {
+            console.error('Error saving user:', error);
+            toastError('An unexpected error occurred', 'Error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+    
+    // Cancel button
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+        window.location.href = '/users';
+    });
+</script>
+{% endblock %}

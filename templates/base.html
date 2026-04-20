@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}OLStar Management Portal{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231f2c34'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Include Reusable Toast Component -->
+    {% include "components/toast.html" %}
+    
+    <button class="hamburger" id="hamburgerBtn">☰</button>
+    
+    <div class="layout">
+        <!-- Left Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>OLStar Website Management Portal</h2>
+            </div>
+            
+            <div class="nav-scrollable">
+                <nav class="nav">
+                    {% block sidebar_links %}
+                    {% endblock %}
+                </nav>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <span class="user-name">{{ session.get('display_name', 'User') }}</span>
+                    <span class="user-role {{ session.get('role', 'staff') }}">{{ session.get('role', 'staff') }}</span>
+                </div>
+                <button class="change-password-btn" id="changePasswordBtn">
+                    <i class="fas fa-key"></i> Change Password
+                </button>
+                <button class="logout-btn" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Sign Out
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content">
+            {% block content %}
+            {% endblock %}
+        </main>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="changePasswordModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-key"></i>
+                    Change Password
+                </h3>
+                <button class="modal-close" id="closeModalBtn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="changePasswordForm">
+                <div class="form-group">
+                    <label for="currentPassword" class="form-label">
+                        <i class="fas fa-lock"></i> Current Password
+                    </label>
+                    <input type="password" id="currentPassword" name="currentPassword" class="form-input" placeholder="Enter your current password" required>
+                </div>
+                <div class="form-group">
+                    <label for="newPassword" class="form-label">
+                        <i class="fas fa-key"></i> New Password
+                    </label>
+                    <input type="password" id="newPassword" name="newPassword" class="form-input" placeholder="Enter new password" required>
+                    <small>Password must be at least 8 characters long</small>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword" class="form-label">
+                        <i class="fas fa-check-circle"></i> Confirm New Password
+                    </label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" class="form-input" placeholder="Confirm your new password" required>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn btn-secondary" id="cancelModalBtn">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitPasswordBtn">
+                        <i class="fas fa-save"></i> Update Password
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/change-password.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/modal-helpers.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+    {% include "components/confirm-modal.html" %}
+</body>
+</html>

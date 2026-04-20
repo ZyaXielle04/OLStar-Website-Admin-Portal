@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Packages | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/packages.css') }}">
+{% endblock %}
+
+{% block sidebar_links %}
+{% if session.get('role') == 'superadmin' %}
+    {% include "partials/nav_superadmin.html" %}
+{% else %}
+    {% include "partials/nav_admin.html" %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Packages</h1>
+        <p>Manage your service packages and assign transport units</p>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="card-header-left">
+                <h3 class="card-title">All Packages</h3>
+                <div class="filter-controls">
+                    <div class="search-box">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="searchInput" class="search-input" placeholder="Search by name or ID...">
+                        <button id="clearSearchBtn" class="clear-search-btn" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% if session.get('role') == 'superadmin' %}
+            <button class="btn btn-primary" id="addPackageBtn">
+                <i class="fas fa-plus"></i> Add Package
+            </button>
+            {% endif %}
+        </div>
+        
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Package ID</th>
+                        <th>Package Name</th>
+                        <th>Max Pax</th>
+                        <th>Max Luggage</th>
+                        <th>Units</th>
+                        <th>Created At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="packagesTableBody">
+                    <!-- Skeleton loaders will appear here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination Controls -->
+        <div class="pagination-container">
+            <div class="pagination-info" id="paginationInfo"></div>
+            <div class="pagination-controls">
+                <button class="pagination-btn" id="prevPageBtn" disabled>
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span class="page-info" id="pageInfo">Page 1 of 1</span>
+                <button class="pagination-btn" id="nextPageBtn" disabled>
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/packages.js') }}"></script>
+{% endblock %}

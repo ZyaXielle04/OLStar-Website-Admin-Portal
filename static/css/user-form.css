@@ -1,0 +1,171 @@
+/* ============================================
+   User Form Page Styles
+   ============================================ */
+
+/* Form Container */
+.user-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Form Groups */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #334155;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-label i {
+    width: 20px;
+    color: #4F46E5;
+    margin-right: 6px;
+}
+
+.form-input,
+.form-select {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    color: #1E293B;
+    font-family: inherit;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+
+.form-input:focus,
+.form-select:focus {
+    outline: none;
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-input:hover,
+.form-select:hover {
+    border-color: #CBD5E1;
+}
+
+.form-input::placeholder {
+    color: #94A3B8;
+    font-weight: 400;
+}
+
+/* Select dropdown custom arrow */
+.form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2364748B' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 1rem center;
+    background-repeat: no-repeat;
+    background-size: 1.2rem;
+}
+
+/* Small text helper */
+.form-group small {
+    display: block;
+    margin-top: 0.5rem;
+    color: #64748B;
+    font-size: 0.7rem;
+}
+
+/* Modal Buttons (form action buttons) */
+.modal-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #E2E8F0;
+}
+
+/* Button Styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.7rem 1.5rem;
+    border-radius: 40px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: inherit;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #4F46E5, #4338CA);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(79, 70, 229, 0.3);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-secondary {
+    background: #F1F5F9;
+    color: #1E293B;
+    border: 1px solid #E2E8F0;
+}
+
+.btn-secondary:hover {
+    background: #E2E8F0;
+    transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .user-form {
+        max-width: 100%;
+    }
+    
+    .modal-buttons {
+        flex-direction: column;
+    }
+    
+    .modal-buttons .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .form-input,
+    .form-select {
+        padding: 0.75rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* Loading state for form */
+.form-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Error state for inputs */
+.form-input.error,
+.form-select.error {
+    border-color: #DC2626;
+    background-color: #FEF2F2;
+}
+
+.error-message {
+    color: #DC2626;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    display: block;
+}

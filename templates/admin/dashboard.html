@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+{% endblock %}
+
+{% block sidebar_links %}
+{% include "partials/nav_admin.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Welcome, {{ session.get('display_name') }}!</h1>
+        <p>Admin Dashboard - System Overview</p>
+    </div>
+    
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+                <h3>Total Customers</h3>
+                <p class="stat-number" id="totalCustomers">--</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-info">
+                <h3>Pending Requests</h3>
+                <p class="stat-number" id="pendingRequests">--</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+                <h3>Completed Tasks</h3>
+                <p class="stat-number" id="completedTasks">--</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">📅</div>
+            <div class="stat-info">
+                <h3>Today's Schedule</h3>
+                <p class="stat-number" id="todaySchedule">--</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="content-grid">
+        <div class="card">
+            <h3><i class="fas fa-clock"></i> Recent Activities</h3>
+            <div class="activity-list" id="activityList">
+                <div class="activity-item">
+                    <span class="activity-time">Loading...</span>
+                    <span class="activity-description">Fetching activities...</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+            <div class="action-buttons">
+                <button class="action-btn" onclick="location.href='/users'">
+                    <i class="fas fa-users"></i> Manage Customers
+                </button>
+                <button class="action-btn" onclick="location.href='/users/create'">
+                    <i class="fas fa-user-plus"></i> Add Customer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function loadDashboardData() {
+        try {
+            // Get common stats
+            const commonResponse = await fetch('/api/common/dashboard/stats');
+            const commonData = await commonResponse.json();
+            
+            // Get admin-specific stats
+            const adminResponse = await fetch('/api/admin/dashboard/stats');
+            const adminData = await adminResponse.json();
+            
+            document.getElementById('totalCustomers').textContent = commonData.total_customers;
+            document.getElementById('pendingRequests').textContent = commonData.pending_requests;
+            document.getElementById('completedTasks').textContent = adminData.completed_tasks;
+            document.getElementById('todaySchedule').textContent = adminData.today_schedule_count;
+            
+            const activityList = document.getElementById('activityList');
+            activityList.innerHTML = '';
+            
+            commonData.recent_activities.forEach(activity => {
+                const activityItem = document.createElement('div');
+                activityItem.className = 'activity-item';
+                activityItem.innerHTML = `
+                    <span class="activity-time">${activity.time}</span>
+                    <span class="activity-description">${activity.description}</span>
+                `;
+                activityList.appendChild(activityItem);
+            });
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', loadDashboardData);
+</script>
+{% endblock %}

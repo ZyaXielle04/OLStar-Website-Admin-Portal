@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Transport Unit Details | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/transport-units.css') }}">
+{% endblock %}
+
+{% block sidebar_links %}
+{% if session.get('role') == 'superadmin' %}
+    {% include "partials/nav_superadmin.html" %}
+{% else %}
+    {% include "partials/nav_admin.html" %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Transport Unit Details</h1>
+        <p>View detailed information about the transport unit</p>
+    </div>
+    
+    <div class="card">
+        <div class="details-container" id="detailsContainer">
+            <div class="skeleton-details">
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line"></div>
+            </div>
+        </div>
+        
+        <div class="modal-buttons">
+            <button type="button" class="btn btn-secondary" id="backBtn">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </button>
+            {% if session.get('role') == 'superadmin' %}
+            <button type="button" class="btn btn-primary" id="editBtn">
+                <i class="fas fa-edit"></i> Edit Unit
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const unitId = '{{ unit_id }}';
+    const userRole = '{{ session.get("role") }}';
+    
+    async function loadUnitDetails() {
+        const container = document.getElementById('detailsContainer');
+        
+        try {
+            const response = await fetch(`/api/common/transport-units/${unitId}`);
+            
+            if (!response.ok) {
+                throw new Error('Failed to load unit details');
+            }
+            
+            const data = await response.json();
+            const unit = data.unit;
+            
+            const statusClass = unit.isAvailable ? 'badge-available' : 'badge-unavailable';
+            const statusText = unit.isAvailable ? 'Available' : 'Unavailable';
+            
+            // Build image HTML if exists
+            let imageHtml = '';
+            if (unit.imageUrl) {
+                imageHtml = `
+                    <div class="details-section">
+                        <h3><i class="fas fa-image"></i> Vehicle Image</h3>
+                        <div class="vehicle-image">
+                            <img src="${unit.imageUrl}" alt="${escapeHtml(unit.transportUnit)}" onclick="window.open(this.src, '_blank')">
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = `
+                <div class="details-grid">
+                    <div class="details-card">
+                        <div class="details-header">
+                            <i class="fas fa-truck"></i>
+                            <h2>${escapeHtml(unit.transportUnit || 'N/A')}</h2>
+                            <span class="badge ${statusClass}">${statusText}</span>
+                        </div>
+                        
+                        ${imageHtml}
+                        
+                        <div class="details-section">
+                            <h3><i class="fas fa-info-circle"></i> Basic Information</h3>
+                            <div class="details-row">
+                                <div class="details-label">Unit ID:</div>
+                                <div class="details-value"><strong>${escapeHtml(unit.id || 'N/A')}</strong></div>
+                            </div>
+                            <div class="details-row">
+                                <div class="details-label">Transport Unit:</div>
+                                <div class="details-value">${escapeHtml(unit.transportUnit || 'N/A')}</div>
+                            </div>
+                            <div class="details-row">
+                                <div class="details-label">Plate Number:</div>
+                                <div class="details-value">${escapeHtml(unit.plateNumber || 'N/A')}</div>
+                            </div>
+                            <div class="details-row">
+                                <div class="details-label">Color:</div>
+                                <div class="details-value">${escapeHtml(unit.color || 'N/A')}</div>
+                            </div>
+                            <div class="details-row">
+                                <div class="details-label">Unit Type:</div>
+                                <div class="details-value">${escapeHtml(unit.unitType || 'N/A')}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="details-section">
+                            <h3><i class="fas fa-chart-line"></i> Status Information</h3>
+                            <div class="details-row">
+                                <div class="details-label">Availability:</div>
+                                <div class="details-value">
+                                    <span class="badge ${statusClass}">${statusText}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="details-section">
+                            <h3><i class="fas fa-history"></i> Audit Information</h3>
+                            <div class="details-row">
+                                <div class="details-label">Created At:</div>
+                                <div class="details-value">${unit.created_at ? new Date(unit.created_at).toLocaleString() : 'N/A'}</div>
+                            </div>
+                            <div class="details-row">
+                                <div class="details-label">Created By:</div>
+                                <div class="details-value">${escapeHtml(unit.created_by_name || unit.created_by || 'N/A')}</div>
+                            </div>
+                            ${unit.updated_at ? `
+                            <div class="details-row">
+                                <div class="details-label">Last Updated:</div>
+                                <div class="details-value">${new Date(unit.updated_at).toLocaleString()}</div>
+                            </div>
+                            <div class="details-row">
+                                <div class="details-label">Updated By:</div>
+                                <div class="details-value">${escapeHtml(unit.updated_by_name || unit.updated_by || 'N/A')}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error loading unit details:', error);
+            container.innerHTML = `
+                <div class="error-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Failed to load transport unit details</p>
+                </div>
+            `;
+            toastError('Failed to load unit details', 'Error');
+        }
+    }
+    
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+    
+    // Event listeners
+    document.getElementById('backBtn').addEventListener('click', function() {
+        window.location.href = '/transport-units';
+    });
+    
+    const editBtn = document.getElementById('editBtn');
+    if (editBtn) {
+        editBtn.addEventListener('click', function() {
+            window.location.href = `/transport-units/${unitId}/edit`;
+        });
+    }
+    
+    // Load details on page load
+    document.addEventListener('DOMContentLoaded', loadUnitDetails);
+</script>
+{% endblock %}
