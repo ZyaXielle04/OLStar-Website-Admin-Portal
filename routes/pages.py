@@ -148,6 +148,14 @@ def package_units_page(package_id):
     """Manage transport units for package - Superadmin only"""
     return render_template('common/package_units.html', package_id=package_id)
 
+# ========== AIRPORT TRANSFER RATES PAGES ==========
+
+@pages_bp.route('/rates/airport-transfer')
+@login_required_page
+@role_required(['superadmin', 'admin'])
+def airport_transfer_page():
+    return render_template('common/airport_transfer.html')
+
 # ========== PENDING BOOKINGS PAGES ==========
 
 @pages_bp.route('/pending-bookings')
@@ -267,20 +275,6 @@ def admin_transport_units_redirect():
 def superadmin_pending_bookings_redirect():
     """Redirect old superadmin pending bookings URL to common page"""
     return redirect(url_for('pages.pending_bookings_page'))
-
-@pages_bp.route('/admin/pending-bookings')
-@login_required_page
-@role_required(['admin', 'superadmin'])
-def admin_pending_bookings_redirect():
-    """Redirect old admin pending bookings URL to common page"""
-    return redirect(url_for('pages.pending_bookings_page'))
-
-@pages_bp.route('/superadmin/booking-history')
-@login_required_page
-@role_required(['superadmin'])
-def superadmin_booking_history_redirect():
-    """Redirect old superadmin booking history URL to common page"""
-    return redirect(url_for('pages.booking_history_page'))
 
 @pages_bp.route('/admin/booking-history')
 @login_required_page

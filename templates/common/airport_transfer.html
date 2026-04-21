@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Airport Transfer Rates | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/airport-transfer.css') }}">
+{% endblock %}
+
+{% block sidebar_links %}
+{% if session.get('role') == 'superadmin' %}
+    {% include "partials/nav_superadmin.html" %}
+{% else %}
+    {% include "partials/nav_admin.html" %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Airport Transfer Rates</h1>
+        <p>Manage fare prices for airport transfers by category and area</p>
+    </div>
+
+    <!-- Categories Section -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Categories</h3>
+            {% if session.get('role') == 'superadmin' %}
+            <button class="btn btn-primary" id="addCategoryBtn">
+                <i class="fas fa-plus"></i> Add Category
+            </button>
+            {% endif %}
+        </div>
+        <div class="categories-container" id="categoriesContainer">
+            <div class="loading-placeholder">Loading categories...</div>
+        </div>
+    </div>
+
+    <!-- Fare Matrix Section -->
+    <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+            <h3 class="card-title">Fare Matrix</h3>
+            <div class="filter-controls">
+                <div class="filter-dropdown">
+                    <label for="categoryFilter">Filter by Category:</label>
+                    <select id="categoryFilter" class="filter-select">
+                        <option value="all">All Categories</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="fare-matrix-table" id="fareMatrixTable">
+                <thead>
+                    <tr id="matrixHeader">
+                        <th>Area / Package</th>
+                    </tr>
+                </thead>
+                <tbody id="matrixBody">
+                    <tr>
+                        <td colspan="10" class="text-center">Loading fare matrix...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Category Modal -->
+<div id="categoryModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Category</h3>
+            <button class="modal-close" id="closeCategoryModal">&times;</button>
+        </div>
+        <form id="categoryForm">
+            <div class="form-group">
+                <label for="categoryName" class="form-label">Category Name *</label>
+                <input type="text" id="categoryName" name="categoryName" class="form-input" placeholder="e.g., Metro Manila, Cavite" required>
+            </div>
+            <div class="form-group">
+                <label for="initialAreaName" class="form-label">Initial Area Name *</label>
+                <input type="text" id="initialAreaName" name="initialAreaName" class="form-input" placeholder="e.g., Makati City, Bacoor" required>
+                <small>This will be the first area under this category. All package prices will be set to 0.</small>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelCategoryBtn">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Category</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add Area Modal -->
+<div id="areaModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="areaModalTitle">Add Area</h3>
+            <button class="modal-close" id="closeAreaModal">&times;</button>
+        </div>
+        <form id="areaForm">
+            <input type="hidden" id="areaCategoryKey">
+            <div class="form-group">
+                <label for="areaName" class="form-label">Area Name</label>
+                <input type="text" id="areaName" name="areaName" class="form-input" placeholder="e.g., Makati City, Bacoor" required>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelAreaBtn">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Area</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Prices Modal -->
+<div id="pricesModal" class="modal-overlay" style="display: none;">
+    <div class="modal modal-large">
+        <div class="modal-header">
+            <h3 id="pricesModalTitle">Edit Fare Prices</h3>
+            <button class="modal-close" id="closePricesModal">&times;</button>
+        </div>
+        <form id="pricesForm">
+            <input type="hidden" id="pricesCategoryKey">
+            <input type="hidden" id="pricesAreaKey">
+            <div class="form-group">
+                <label class="form-label">Package Rates</label>
+                <div id="packagePricesContainer" class="package-prices-container">
+                    <!-- Dynamic package price inputs will go here -->
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelPricesBtn">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Prices</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/airport-transfer.js') }}"></script>
+{% endblock %}
