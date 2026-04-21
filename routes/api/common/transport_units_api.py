@@ -261,24 +261,34 @@ def update_transport_unit(unit_id):
         
         # Prepare update data
         update_data = {}
+        package_update_data = {}  # For syncing with packages
         
         if 'color' in data:
-            update_data['color'] = data['color'].strip()
+            color_value = data['color'].strip()
+            update_data['color'] = color_value
+            package_update_data['color'] = color_value
         
         if 'plateNumber' in data:
-            update_data['plateNumber'] = data['plateNumber'].strip().upper()
+            plate_value = data['plateNumber'].strip().upper()
+            update_data['plateNumber'] = plate_value
+            package_update_data['plateNumber'] = plate_value
         
         if 'transportUnit' in data:
-            update_data['transportUnit'] = data['transportUnit'].strip()
+            unit_value = data['transportUnit'].strip()
+            update_data['transportUnit'] = unit_value
+            package_update_data['transportUnit'] = unit_value
         
         if 'unitType' in data:
             valid_unit_types = ['Van', 'SUV', 'Sedan']
             if data['unitType'] not in valid_unit_types:
                 return jsonify({'error': f'Unit type must be one of: {", ".join(valid_unit_types)}'}), 400
             update_data['unitType'] = data['unitType']
+            package_update_data['unitType'] = data['unitType']
         
         if 'isAvailable' in data:
-            update_data['isAvailable'] = data['isAvailable'] == 'true' or data['isAvailable'] == True
+            is_available = data['isAvailable'] == 'true' or data['isAvailable'] == True
+            update_data['isAvailable'] = is_available
+            package_update_data['isAvailable'] = is_available
         
         # Handle image upload
         if image_file and image_file.filename:
@@ -287,6 +297,7 @@ def update_transport_unit(unit_id):
                 image_url = upload_image_to_cloudinary(image_file, unit_id)
                 if image_url:
                     update_data['imageUrl'] = image_url
+                    # Note: Images are not synced to packages (packages only store unit references)
                     print(f"Image uploaded successfully: {image_url}")
                 else:
                     print("Image upload failed")
@@ -304,12 +315,16 @@ def update_transport_unit(unit_id):
         
         print(f"Updating RTDB with: {update_data}")
         
-        # Update the unit
+        # Update the transport unit
         unit_ref.update(update_data)
         
-        # Log activity - ADD THIS
+        # SYNC WITH PACKAGES: Update this unit in all packages that contain it
+        if package_update_data:
+            update_transport_unit_in_all_packages(unit_id, package_update_data)
+        
+        # Log activity
         log_activity(
-            f"Updated transport unit: {unit_id} - {update_data.get('transportUnit', existing.get('transportUnit', ''))}",
+            f"Updated transport unit: {unit_id}",
             session.get('user_id'),
             session.get('display_name')
         )
@@ -336,9 +351,13 @@ def delete_transport_unit(unit_id):
         
         unit_name = existing.get('transportUnit', unit_id)
         
+        # FIRST: Remove this unit from all packages that contain it
+        remove_transport_unit_from_all_packages(unit_id)
+        
+        # THEN: Delete the transport unit
         unit_ref.delete()
         
-        # Log activity - ADD THIS
+        # Log activity
         log_activity(
             f"Deleted transport unit: {unit_id} - {unit_name}",
             session.get('user_id'),
@@ -372,9 +391,12 @@ def toggle_availability(unit_id):
             'updated_by_name': session.get('display_name')
         })
         
+        # SYNC WITH PACKAGES: Update availability in all packages
+        update_transport_unit_in_all_packages(unit_id, {'isAvailable': new_status})
+        
         status_text = "available" if new_status else "unavailable"
         
-        # Log activity - ADD THIS
+        # Log activity
         log_activity(
             f"Marked transport unit {unit_id} as {status_text}",
             session.get('user_id'),
@@ -389,3 +411,77 @@ def toggle_availability(unit_id):
     except Exception as e:
         print(f"ERROR in toggle_availability: {str(e)}")
         return jsonify({'error': str(e)}), 500
+    
+# Add these helper functions at the top of your transport_units_api.py
+
+def update_transport_unit_in_all_packages(transport_unit_id, update_data):
+    """Update a transport unit in all packages that contain it"""
+    try:
+        packages_ref = db.reference('packages')
+        all_packages = packages_ref.get()
+        
+        if not all_packages:
+            return
+        
+        updated_count = 0
+        for package_id, package_data in all_packages.items():
+            transport_units = package_data.get('transportUnits', [])
+            
+            if not transport_units:
+                continue
+            
+            # Check if this package contains the transport unit
+            updated = False
+            for i, unit in enumerate(transport_units):
+                if isinstance(unit, dict) and unit.get('transportUnitId') == transport_unit_id:
+                    # Update the unit data
+                    for key, value in update_data.items():
+                        transport_units[i][key] = value
+                    updated = True
+                    updated_count += 1
+            
+            if updated:
+                # Save back to database
+                packages_ref.child(package_id).child('transportUnits').set(transport_units)
+        
+        if updated_count > 0:
+            print(f"Updated transport unit {transport_unit_id} in {updated_count} packages")
+        return updated_count
+        
+    except Exception as e:
+        print(f"Error updating transport unit in packages: {str(e)}")
+        return 0
+
+def remove_transport_unit_from_all_packages(transport_unit_id):
+    """Remove a transport unit from all packages that contain it"""
+    try:
+        packages_ref = db.reference('packages')
+        all_packages = packages_ref.get()
+        
+        if not all_packages:
+            return
+        
+        removed_count = 0
+        for package_id, package_data in all_packages.items():
+            transport_units = package_data.get('transportUnits', [])
+            
+            if not transport_units:
+                continue
+            
+            # Filter out the transport unit
+            original_length = len(transport_units)
+            new_transport_units = [unit for unit in transport_units 
+                                   if not (isinstance(unit, dict) and unit.get('transportUnitId') == transport_unit_id)]
+            
+            if len(new_transport_units) != original_length:
+                # Save back to database
+                packages_ref.child(package_id).child('transportUnits').set(new_transport_units)
+                removed_count += 1
+        
+        if removed_count > 0:
+            print(f"Removed transport unit {transport_unit_id} from {removed_count} packages")
+        return removed_count
+        
+    except Exception as e:
+        print(f"Error removing transport unit from packages: {str(e)}")
+        return 0
