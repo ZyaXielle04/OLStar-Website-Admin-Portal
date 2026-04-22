@@ -19,3 +19,8 @@ def login_required_api(f):
             return jsonify({'message': 'Authentication required'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+def no_rate_limit(f):
+    """Decorator to mark a route as exempt from rate limiting"""
+    f._limiter_exempt = True
+    return f
