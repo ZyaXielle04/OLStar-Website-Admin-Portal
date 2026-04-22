@@ -17,13 +17,13 @@
         <i class="fas fa-tag"></i> Rates
     </summary>
     <div class="nav-submenu">
-        <a href="/rates/airport-transfer" class="nav-sublink {% if request.path == '/rates/airport-transfer' or request.path.startswith('/rates/airport-transfer/') %}active{% endif %}">
+        <a href="/rates/airport-transfer" class="nav-sublink {% if request.path == '/rates/airport-transfer' %}active{% endif %}">
             <i class="fas fa-plane"></i> Airport Transfer
         </a>
-        <a href="/rates/metro-manila-transfer" class="nav-sublink {% if request.path == '/rates/metro-manila-transfer' or request.path.startswith('/rates/metro-manila-transfer/') %}active{% endif %}">
+        <a href="/rates/metro-manila-transfer" class="nav-sublink {% if request.path == '/rates/metro-manila-transfer' %}active{% endif %}">
             <i class="fas fa-map-marker-alt"></i> Metro Manila Transfer
         </a>
-        <a href="/rates/car-rental" class="nav-sublink {% if request.path == '/rates/car-rental' or request.path.startswith('/rates/car-rental/') %}active{% endif %}">
+        <a href="/rates/car-rental" class="nav-sublink {% if request.path == '/rates/car-rental' %}active{% endif %}">
             <i class="fas fa-car"></i> Car Rental
         </a>
     </div>

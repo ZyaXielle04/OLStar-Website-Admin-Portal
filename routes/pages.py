@@ -156,6 +156,14 @@ def package_units_page(package_id):
 def airport_transfer_page():
     return render_template('common/airport_transfer.html')
 
+# ========== METRO MANILA TRANSFER RATES PAGES ==========
+
+@pages_bp.route('/rates/metro-manila-transfer')
+@login_required_page
+@role_required(['superadmin', 'admin'])
+def metro_manila_transfer_page():
+    return render_template('common/metro_manila_transfer.html')
+
 # ========== PENDING BOOKINGS PAGES ==========
 
 @pages_bp.route('/pending-bookings')

@@ -1,27 +1,9 @@
 from flask import Blueprint, request, jsonify, session
-from functools import wraps
 from firebase_admin import db
 from datetime import datetime
+from backend.decorators import login_required_api, role_required_api, no_rate_limit
 
 airport_transfer_api_bp = Blueprint('airport_transfer_api', __name__, url_prefix='/common/airport-transfer')
-
-def login_required_api(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required_api(allowed_roles):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'role' not in session or session['role'] not in allowed_roles:
-                return jsonify({'error': 'Forbidden'}), 403
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 def log_activity(description, user_id, user_name):
     try:
@@ -59,6 +41,7 @@ def get_all_packages():
 @airport_transfer_api_bp.route('/categories', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_categories():
     """Get all categories with their areas and prices"""
     try:
@@ -86,6 +69,7 @@ def get_categories():
 @airport_transfer_api_bp.route('/categories', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def add_category():
     """Add a new category with an initial area and all packages set to "0" as string"""
     try:
@@ -150,6 +134,7 @@ def add_category():
 @airport_transfer_api_bp.route('/categories/<category_key>', methods=['DELETE'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def delete_category(category_key):
     """Delete a category and all its areas"""
     try:
@@ -173,6 +158,7 @@ def delete_category(category_key):
 @airport_transfer_api_bp.route('/categories/<category_key>/toggle', methods=['PATCH'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def toggle_category(category_key):
     """Toggle category active status"""
     try:
@@ -202,6 +188,7 @@ def toggle_category(category_key):
 @airport_transfer_api_bp.route('/categories/<category_key>/areas', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def add_area(category_key):
     """Add a new area to a category with all packages set to "0" as string"""
     try:
@@ -257,6 +244,7 @@ def add_area(category_key):
 @airport_transfer_api_bp.route('/categories/<category_key>/areas/<area_key>', methods=['DELETE'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def delete_area(category_key, area_key):
     """Delete an area from a category"""
     try:
@@ -288,6 +276,7 @@ def delete_area(category_key, area_key):
 @airport_transfer_api_bp.route('/categories/<category_key>/areas/<area_key>/prices', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_prices(category_key, area_key):
     """Get prices for a specific area"""
     try:
@@ -314,6 +303,7 @@ def get_prices(category_key, area_key):
 @airport_transfer_api_bp.route('/categories/<category_key>/areas/<area_key>/prices', methods=['PUT'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def update_prices(category_key, area_key):
     """Update prices for a specific area - store as strings"""
     try:
@@ -353,6 +343,7 @@ def update_prices(category_key, area_key):
 @airport_transfer_api_bp.route('/packages')
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_packages():
     """Get all packages for the fare matrix"""
     try:
@@ -379,6 +370,7 @@ def get_packages():
 @airport_transfer_api_bp.route('/matrix')
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_matrix():
     """Get complete fare matrix for display"""
     try:
@@ -428,6 +420,7 @@ def get_matrix():
 @airport_transfer_api_bp.route('/seed-database', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def seed_database():
     """Seed the database with sample data - prices as strings"""
     try:
