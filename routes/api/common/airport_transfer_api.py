@@ -62,7 +62,8 @@ def get_all_packages():
 def get_categories():
     """Get all categories with their areas and prices"""
     try:
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         all_categories = categories_ref.get()
         
         if not all_categories:
@@ -107,13 +108,14 @@ def add_category():
         # Initialize prices for all packages to "0" as STRING
         initial_prices = {}
         for pkg in all_packages:
-            initial_prices[pkg] = "0"  # ← Store as string
+            initial_prices[pkg] = "0"
         
         # Create category with area and prices
         category_key = category_name.lower().replace(' ', '_')
         area_key = area_name.lower().replace(' ', '_')
         
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         current_data = categories_ref.get() or {}
         
         if category_key in current_data:
@@ -151,7 +153,8 @@ def add_category():
 def delete_category(category_key):
     """Delete a category and all its areas"""
     try:
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         current_data = categories_ref.get() or {}
         
         if category_key not in current_data:
@@ -173,7 +176,8 @@ def delete_category(category_key):
 def toggle_category(category_key):
     """Toggle category active status"""
     try:
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         current_data = categories_ref.get() or {}
         
         if category_key not in current_data:
@@ -216,9 +220,10 @@ def add_area(category_key):
         # Initialize prices for all packages to "0" as STRING
         initial_prices = {}
         for pkg in all_packages:
-            initial_prices[pkg] = "0"  # ← Store as string
+            initial_prices[pkg] = "0"
         
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         current_data = categories_ref.get() or {}
         
         if category_key not in current_data:
@@ -255,7 +260,8 @@ def add_area(category_key):
 def delete_area(category_key, area_key):
     """Delete an area from a category"""
     try:
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         current_data = categories_ref.get() or {}
         
         if category_key not in current_data:
@@ -285,7 +291,8 @@ def delete_area(category_key, area_key):
 def get_prices(category_key, area_key):
     """Get prices for a specific area"""
     try:
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         current_data = categories_ref.get() or {}
         
         if category_key not in current_data:
@@ -316,9 +323,10 @@ def update_prices(category_key, area_key):
         # Convert all prices to strings
         prices_as_strings = {}
         for pkg_name, price_value in prices.items():
-            prices_as_strings[pkg_name] = str(price_value)  # ← Store as string
+            prices_as_strings[pkg_name] = str(price_value)
         
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         current_data = categories_ref.get() or {}
         
         if category_key not in current_data:
@@ -385,8 +393,8 @@ def get_matrix():
                 'name': pkg_data.get('packageName', '')
             })
         
-        # Get categories
-        categories_ref = db.reference('airportTransfer')
+        # Get categories - Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         all_categories = categories_ref.get() or {}
         
         matrix = []
@@ -432,7 +440,7 @@ def seed_database():
         # Initialize prices to "0" as STRINGS
         initial_prices = {}
         for pkg in all_packages:
-            initial_prices[pkg] = "0"  # ← Store as string
+            initial_prices[pkg] = "0"
         
         sample_data = {
             "cavite": {
@@ -495,7 +503,8 @@ def seed_database():
             }
         }
         
-        categories_ref = db.reference('airportTransfer')
+        # Updated path: rates/airportTransfer
+        categories_ref = db.reference('rates/airportTransfer')
         categories_ref.set(sample_data)
         
         log_activity("Seeded airport transfer database", session.get('user_id'), session.get('display_name'))
