@@ -4,26 +4,9 @@ from firebase_admin import db
 from datetime import datetime
 import random
 import string
+from backend.decorators import login_required_api, role_required_api
 
 common_packages_api_bp = Blueprint('common_packages_api', __name__, url_prefix='/common/packages')
-
-def login_required_api(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required_api(allowed_roles):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'role' not in session or session['role'] not in allowed_roles:
-                return jsonify({'error': 'Forbidden'}), 403
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 def generate_package_id():
     """Generate a unique Package ID in format: PKGXXX (PKG + 3 random uppercase letters)"""

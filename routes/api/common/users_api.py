@@ -2,26 +2,9 @@ from flask import Blueprint, request, jsonify, session
 from functools import wraps
 from firebase_admin import db, auth
 from datetime import datetime
+from backend.decorators import login_required_api, role_required_api
 
 common_users_api_bp = Blueprint('common_users_api', __name__, url_prefix='/common/users')
-
-def login_required_api(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required_api(allowed_roles):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'role' not in session or session['role'] not in allowed_roles:
-                return jsonify({'error': 'Forbidden'}), 403
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 def get_user_creation_date(uid):
     """Get user creation date from Firebase Auth"""

@@ -2,31 +2,12 @@ from flask import Blueprint, render_template, request, jsonify, session
 from functools import wraps
 from firebase_admin import db
 from datetime import datetime
-import re
 import random
 import string
 import cloudinary.uploader
-import cloudinary.utils
+from backend.decorators import login_required_api, role_required_api
 
 common_transport_units_api_bp = Blueprint('common_transport_units_api', __name__, url_prefix='/common/transport-units')
-
-def login_required_api(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required_api(allowed_roles):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'role' not in session or session['role'] not in allowed_roles:
-                return jsonify({'error': 'Forbidden'}), 403
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 def log_activity(description, user_id, user_name):
     """Helper function to log activities to Realtime Database"""
