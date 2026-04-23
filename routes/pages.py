@@ -32,13 +32,24 @@ def index():
 @pages_bp.route('/login')
 def login_page():
     if 'user_id' in session:
-        return redirect(url_for('pages.dashboard_redirect'))
+        role = session.get('role', 'customer')
+        # If customer is trying to access login page, log them out
+        if role == 'customer':
+            session.clear()
+        else:
+            return redirect(url_for('pages.dashboard_redirect'))
     return render_template('index.html')
 
 @pages_bp.route('/dashboard')
 @login_required_page
 def dashboard_redirect():
     role = session.get('role', 'customer')
+    
+    # Block customers from accessing the admin portal
+    if role == 'customer':
+        # Redirect to login - don't clear session here
+        return redirect(url_for('pages.login_page'))
+    
     if role == 'superadmin':
         return redirect(url_for('pages.superadmin_dashboard'))
     else:
@@ -92,14 +103,14 @@ def transport_units_page():
 
 @pages_bp.route('/transport-units/create')
 @login_required_page
-@role_required(['superadmin'])  # Only superadmin can create
+@role_required(['superadmin'])
 def transport_unit_create_page():
     """Create Transport Unit page - Superadmin only"""
     return render_template('common/transport_unit_form.html')
 
 @pages_bp.route('/transport-units/<unit_id>/edit')
 @login_required_page
-@role_required(['superadmin'])  # Only superadmin can edit
+@role_required(['superadmin'])
 def transport_unit_edit_page(unit_id):
     """Edit Transport Unit page - Superadmin only"""
     return render_template('common/transport_unit_form.html', unit_id=unit_id)
@@ -122,14 +133,14 @@ def packages_page():
 
 @pages_bp.route('/packages/create')
 @login_required_page
-@role_required(['superadmin'])  # Only superadmin can create
+@role_required(['superadmin'])
 def package_create_page():
     """Create Package page - Superadmin only"""
     return render_template('common/package_form.html')
 
 @pages_bp.route('/packages/<package_id>/edit')
 @login_required_page
-@role_required(['superadmin'])  # Only superadmin can edit
+@role_required(['superadmin'])
 def package_edit_page(package_id):
     """Edit Package page - Superadmin only"""
     return render_template('common/package_form.html', package_id=package_id)
@@ -143,7 +154,7 @@ def package_view_page(package_id):
 
 @pages_bp.route('/packages/<package_id>/units')
 @login_required_page
-@role_required(['superadmin'])  # Only superadmin can manage units
+@role_required(['superadmin'])
 def package_units_page(package_id):
     """Manage transport units for package - Superadmin only"""
     return render_template('common/package_units.html', package_id=package_id)
@@ -284,9 +295,51 @@ def superadmin_pending_bookings_redirect():
     """Redirect old superadmin pending bookings URL to common page"""
     return redirect(url_for('pages.pending_bookings_page'))
 
+@pages_bp.route('/superadmin/booking-history')
+@login_required_page
+@role_required(['superadmin'])
+def superadmin_booking_history_redirect():
+    """Redirect old superadmin booking history URL to common page"""
+    return redirect(url_for('pages.booking_history_page'))
+
+@pages_bp.route('/admin/pending-bookings')
+@login_required_page
+@role_required(['admin', 'superadmin'])
+def admin_pending_bookings_redirect():
+    """Redirect old admin pending bookings URL to common page"""
+    return redirect(url_for('pages.pending_bookings_page'))
+
 @pages_bp.route('/admin/booking-history')
 @login_required_page
 @role_required(['admin', 'superadmin'])
 def admin_booking_history_redirect():
     """Redirect old admin booking history URL to common page"""
     return redirect(url_for('pages.booking_history_page'))
+
+@pages_bp.route('/superadmin/rates/airport-transfer')
+@login_required_page
+@role_required(['superadmin'])
+def superadmin_airport_transfer_redirect():
+    """Redirect old superadmin airport transfer URL to common page"""
+    return redirect(url_for('pages.airport_transfer_page'))
+
+@pages_bp.route('/admin/rates/airport-transfer')
+@login_required_page
+@role_required(['admin', 'superadmin'])
+def admin_airport_transfer_redirect():
+    """Redirect old admin airport transfer URL to common page"""
+    return redirect(url_for('pages.airport_transfer_page'))
+
+@pages_bp.route('/superadmin/rates/metro-manila-transfer')
+@login_required_page
+@role_required(['superadmin'])
+def superadmin_metro_manila_transfer_redirect():
+    """Redirect old superadmin metro manila transfer URL to common page"""
+    return redirect(url_for('pages.metro_manila_transfer_page'))
+
+@pages_bp.route('/admin/rates/metro-manila-transfer')
+@login_required_page
+@role_required(['admin', 'superadmin'])
+def admin_metro_manila_transfer_redirect():
+    """Redirect old admin metro manila transfer URL to common page"""
+    return redirect(url_for('pages.metro_manila_transfer_page'))

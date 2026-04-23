@@ -30,15 +30,15 @@ def get_user_role(uid):
         
         if user_data and 'role' in user_data:
             role = user_data.get('role')
-            # Validate role is either superadmin or admin
-            if role in ['superadmin', 'admin']:
+            # Allow all valid roles
+            if role in ['superadmin', 'admin', 'customer']:
                 return role
         
-        # Default to admin if role not found or invalid
-        return 'admin'
+        # Default to customer (least privilege) if role not found or invalid
+        return 'customer'
     except Exception as e:
         current_app.logger.error(f'Error getting user role from RTDB: {str(e)}')
-        return 'admin'  # Default role on error
+        return 'customer'  # Default to customer on error
 
 
 def is_user_active(uid):
@@ -446,8 +446,9 @@ def update_user_role(uid):
         data = request.get_json()
         new_role = data.get('role')
         
-        if new_role not in ['superadmin', 'admin']:
-            return jsonify({'message': 'Invalid role. Must be superadmin or admin'}), 400
+        # Allow customer role as well
+        if new_role not in ['superadmin', 'admin', 'customer']:
+            return jsonify({'message': 'Invalid role. Must be superadmin, admin, or customer'}), 400
         
         # Update role in Realtime Database
         user_ref = db.reference(f'users/{uid}')
