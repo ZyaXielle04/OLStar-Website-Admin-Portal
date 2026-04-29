@@ -175,6 +175,14 @@ def airport_transfer_page():
 def metro_manila_transfer_page():
     return render_template('common/metro_manila_transfer.html')
 
+# ========== CAR RENTAL PAGES ==========
+
+@pages_bp.route('/rates/car-rental')
+@login_required_page
+@role_required(['superadmin', 'admin'])
+def car_rental_page():
+    return render_template('common/car_rental.html')
+
 # ========== PENDING BOOKINGS PAGES ==========
 
 @pages_bp.route('/pending-bookings')
