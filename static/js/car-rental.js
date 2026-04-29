@@ -60,7 +60,6 @@ async function loadLocations() {
         displayLocations(data.locations);
         updateLocationSelects();
         
-        // If a pickup location is already selected, refresh the dropoff dropdown
         if (currentPickupLocation) {
             updateDropoffSelect();
         }
@@ -109,19 +108,15 @@ function updateLocationSelects() {
             return isActive;
         });
         
-        console.log('Active locations for pickup:', activeLocations);
-        
         let pickupOptions = '<option value="">-- Select Pickup Location --</option>';
         activeLocations.forEach(loc => {
             pickupOptions += `<option value="${loc.key}">${escapeHtml(loc.name)} (Delivery: ₱${formatNumber(loc.deliveryFeeFromPasay)})</option>`;
         });
         pickupSelect.innerHTML = pickupOptions;
         
-        // Only reset dropoff to default if no pickup is selected
         if (!currentPickupLocation) {
             dropoffSelect.innerHTML = '<option value="same">-- Same as Pickup Location --</option>';
         } else {
-            // If pickup is selected, update the dropoff dropdown
             updateDropoffSelect();
         }
     }
@@ -129,52 +124,19 @@ function updateLocationSelects() {
 
 function updateDropoffSelect() {
     const dropoffSelect = document.getElementById('dropoffLocationSelect');
-    if (!dropoffSelect) {
-        console.log('Dropoff select element not found');
-        return;
-    }
+    if (!dropoffSelect || !currentData.locations || !currentPickupLocation) return;
     
-    if (!currentData.locations) {
-        console.log('No locations data available');
-        return;
-    }
-    
-    if (!currentPickupLocation) {
-        console.log('No pickup location selected');
-        dropoffSelect.innerHTML = '<option value="same">-- Same as Pickup Location --</option>';
-        return;
-    }
-    
-    console.log('=== UPDATE DROPOFF DEBUG ===');
-    console.log('Current pickup location:', currentPickupLocation);
-    console.log('All locations:', JSON.parse(JSON.stringify(currentData.locations)));
-    
-    // Get all active locations EXCEPT the pickup location
-    // Handle both boolean and string values for isActive
     const otherLocations = currentData.locations.filter(l => {
-        // Check if location is active (handles boolean true, string "true", or missing/undefined as true)
         let isActive = true;
         if (l.isActive !== undefined) {
             if (typeof l.isActive === 'boolean') {
                 isActive = l.isActive;
             } else if (typeof l.isActive === 'string') {
                 isActive = l.isActive.toLowerCase() === 'true';
-            } else {
-                isActive = true;
             }
         }
-        
-        const isNotPickup = l.key !== currentPickupLocation;
-        const shouldInclude = isActive && isNotPickup;
-        
-        if (shouldInclude) {
-            console.log('Including location:', l.key, l.name, 'isActive:', l.isActive);
-        }
-        
-        return shouldInclude;
+        return isActive && l.key !== currentPickupLocation;
     });
-    
-    console.log('Other locations (excluding pickup):', otherLocations.map(l => ({ key: l.key, name: l.name })));
     
     let options = '<option value="same">-- Same as Pickup Location --</option>';
     
@@ -182,14 +144,11 @@ function updateDropoffSelect() {
         options += `<option value="${loc.key}">${escapeHtml(loc.name)}</option>`;
     });
     
-    // If no other locations, show a disabled option
     if (otherLocations.length === 0) {
-        console.log('No other locations found. Please add more locations to the system.');
-        options += '<option value="" disabled>-- No other locations available. Please add more locations --</option>';
+        options += '<option value="" disabled>-- No other locations available --</option>';
     }
     
     dropoffSelect.innerHTML = options;
-    console.log('Dropoff select HTML set to:', dropoffSelect.innerHTML);
 }
 
 async function addOrUpdateLocation() {
@@ -298,7 +257,6 @@ function displayDurations(durations) {
         return;
     }
     
-    // Sort durations by hours (ascending) for display
     const sortedDurations = [...durations].sort((a, b) => a.hours - b.hours);
     
     container.innerHTML = sortedDurations.map(duration => `
@@ -434,7 +392,7 @@ function initializeUnitTypeFilter() {
     });
 }
 
-// ========== RATES WITH PAGINATION ==========
+// ========== RATES WITH SAME/DIFFERENT LOCATION STRUCTURE ==========
 
 async function loadRateTableData() {
     try {
@@ -461,18 +419,18 @@ function getDeliveryFee(locationKey) {
     return location ? location.deliveryFeeFromPasay : 0;
 }
 
-function getRateForUnit(unitId, locationKey, durationKey) {
+function getRateForUnit(unitId, rateType, locationKey, durationKey) {
+    // rateType: 'same_location' or 'different_location'
+    // For same_location: locationKey is the location (e.g., 'manila')
+    // For different_location: locationKey is the pair (e.g., 'manila_to_makati')
+    
     if (currentData.rates[unitId] && 
-        currentData.rates[unitId][locationKey] && 
-        currentData.rates[unitId][locationKey][durationKey]) {
-        return parseInt(currentData.rates[unitId][locationKey][durationKey]);
+        currentData.rates[unitId][rateType] && 
+        currentData.rates[unitId][rateType][locationKey] && 
+        currentData.rates[unitId][rateType][locationKey][durationKey]) {
+        return parseInt(currentData.rates[unitId][rateType][locationKey][durationKey]);
     }
     return 0;
-}
-
-function calculateTotalPrice(baseRate, isDifferentLocation, deliveryFee) {
-    const rentalCost = isDifferentLocation ? baseRate * 2 : baseRate;
-    return rentalCost + deliveryFee;
 }
 
 function renderRateTable() {
@@ -496,13 +454,21 @@ function renderRateTable() {
         return;
     }
     
-    // Sort durations by hours (ascending) - SMALLEST FIRST
     const activeDurations = currentData.durations
         .filter(d => d.isActive !== false)
         .sort((a, b) => a.hours - b.hours);
     
     const isDifferentLocation = currentDropoffLocation && currentDropoffLocation !== 'same';
-    const dropoffKey = isDifferentLocation ? currentDropoffLocation : currentPickupLocation;
+    const rateType = isDifferentLocation ? 'different_location' : 'same_location';
+    
+    // Determine the location key for rate lookup
+    let rateLocationKey;
+    if (isDifferentLocation) {
+        rateLocationKey = `${currentPickupLocation}_to_${currentDropoffLocation}`;
+    } else {
+        rateLocationKey = currentPickupLocation;
+    }
+    
     const deliveryFee = getDeliveryFee(currentPickupLocation);
     
     thead.innerHTML = `
@@ -512,7 +478,6 @@ function renderRateTable() {
         </tr>
     `;
     
-    // Calculate pagination based on filtered units
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const paginatedUnits = filteredUnits.slice(startIndex, endIndex);
@@ -535,9 +500,9 @@ function renderRateTable() {
     if (isDifferentLocation) {
         const dropoffLocationObj = currentData.locations.find(l => l.key === currentDropoffLocation);
         const dropoffName = dropoffLocationObj?.name || currentDropoffLocation;
-        calculationText.innerHTML = `🚗 ${pickupName} → ${dropoffName} (Different locations): Rental Rate × 2 + Delivery Fee (₱${formatNumber(deliveryFee)} from Pasay to ${pickupName})`;
+        calculationText.innerHTML = `🚗 ${pickupName} → ${dropoffName} (Different locations): Using different_location rate + Delivery Fee (₱${formatNumber(deliveryFee)} from Pasay to ${pickupName})`;
     } else {
-        calculationText.innerHTML = `📍 ${pickupName} (Same pickup/dropoff): Rental Rate × 1 + Delivery Fee (₱${formatNumber(deliveryFee)} from Pasay to ${pickupName})`;
+        calculationText.innerHTML = `📍 ${pickupName} (Same pickup/dropoff): Using same_location rate + Delivery Fee (₱${formatNumber(deliveryFee)} from Pasay to ${pickupName})`;
     }
     
     let rowsHtml = '';
@@ -550,14 +515,14 @@ function renderRateTable() {
         </td>`;
         
         for (const duration of activeDurations) {
-            const baseRate = getRateForUnit(unit.id, dropoffKey, duration.key);
-            const totalPrice = calculateTotalPrice(baseRate, isDifferentLocation, deliveryFee);
+            const baseRate = getRateForUnit(unit.id, rateType, rateLocationKey, duration.key);
+            const totalPrice = baseRate + deliveryFee;
             
-            rowsHtml += `<td class="rate-price" onclick="makeEditable(this, '${unit.id}', '${dropoffKey}', '${duration.key}', ${baseRate})">
+            rowsHtml += `<td class="rate-price" onclick="makeEditable(this, '${unit.id}', '${rateType}', '${rateLocationKey}', '${duration.key}', ${baseRate})">
                 <div class="price-info">
                     <span class="base-price">Rate: ₱${formatNumber(baseRate)} (${duration.hours}hrs)</span><br>
                     <span class="total-price"><strong>Total: ₱${formatNumber(totalPrice)}</strong></span>
-                    <span class="price-breakdown">${isDifferentLocation ? '×2 for diff location' : '×1 for same location'} + ₱${formatNumber(deliveryFee)} delivery</span>
+                    <span class="price-breakdown">+ ₱${formatNumber(deliveryFee)} delivery</span>
                 </div>
             </td>`;
         }
@@ -568,7 +533,7 @@ function renderRateTable() {
     tbody.innerHTML = rowsHtml;
 }
 
-function makeEditable(element, unitId, locationKey, durationKey, currentBaseRate) {
+function makeEditable(element, unitId, rateType, locationKey, durationKey, currentBaseRate) {
     if (sessionRole !== 'superadmin') return;
     
     const input = document.createElement('input');
@@ -591,7 +556,8 @@ function makeEditable(element, unitId, locationKey, durationKey, currentBaseRate
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     transportUnitId: unitId, 
-                    location: locationKey, 
+                    rateType: rateType,
+                    locationKey: locationKey,
                     duration: durationKey, 
                     price: newBaseRate 
                 })
@@ -599,9 +565,11 @@ function makeEditable(element, unitId, locationKey, durationKey, currentBaseRate
             
             if (!response.ok) throw new Error('Failed to save rate');
             
+            // Update local data
             if (!currentData.rates[unitId]) currentData.rates[unitId] = {};
-            if (!currentData.rates[unitId][locationKey]) currentData.rates[unitId][locationKey] = {};
-            currentData.rates[unitId][locationKey][durationKey] = newBaseRate;
+            if (!currentData.rates[unitId][rateType]) currentData.rates[unitId][rateType] = {};
+            if (!currentData.rates[unitId][rateType][locationKey]) currentData.rates[unitId][rateType][locationKey] = {};
+            currentData.rates[unitId][rateType][locationKey][durationKey] = newBaseRate;
             
             showNotification('Rate saved successfully');
             renderRateTable();
