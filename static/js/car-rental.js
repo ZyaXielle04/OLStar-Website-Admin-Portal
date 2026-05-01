@@ -420,10 +420,6 @@ function getDeliveryFee(locationKey) {
 }
 
 function getRateForUnit(unitId, rateType, locationKey, durationKey) {
-    // rateType: 'same_location' or 'different_location'
-    // For same_location: locationKey is the location (e.g., 'manila')
-    // For different_location: locationKey is the pair (e.g., 'manila_to_makati')
-    
     if (currentData.rates[unitId] && 
         currentData.rates[unitId][rateType] && 
         currentData.rates[unitId][rateType][locationKey] && 
@@ -461,7 +457,6 @@ function renderRateTable() {
     const isDifferentLocation = currentDropoffLocation && currentDropoffLocation !== 'same';
     const rateType = isDifferentLocation ? 'different_location' : 'same_location';
     
-    // Determine the location key for rate lookup
     let rateLocationKey;
     if (isDifferentLocation) {
         rateLocationKey = `${currentPickupLocation}_to_${currentDropoffLocation}`;
@@ -515,16 +510,18 @@ function renderRateTable() {
         </td>`;
         
         for (const duration of activeDurations) {
-            const baseRate = getRateForUnit(unit.id, rateType, rateLocationKey, duration.key);
+            // FIX: Use the key from the duration object (which is the hour string)
+            const hourKey = duration.key;
+            const baseRate = getRateForUnit(unit.id, rateType, rateLocationKey, hourKey);
             const totalPrice = baseRate + deliveryFee;
             
-            rowsHtml += `<td class="rate-price" onclick="makeEditable(this, '${unit.id}', '${rateType}', '${rateLocationKey}', '${duration.key}', ${baseRate})">
+            rowsHtml += `<td class="rate-price" onclick="makeEditable(this, '${unit.id}', '${rateType}', '${rateLocationKey}', '${hourKey}', ${baseRate})">
                 <div class="price-info">
                     <span class="base-price">Rate: ₱${formatNumber(baseRate)} (${duration.hours}hrs)</span><br>
                     <span class="total-price"><strong>Total: ₱${formatNumber(totalPrice)}</strong></span>
                     <span class="price-breakdown">+ ₱${formatNumber(deliveryFee)} delivery</span>
                 </div>
-            </td>`;
+             </td>`;
         }
         
         rowsHtml += '</tr>';
