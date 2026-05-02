@@ -1,0 +1,150 @@
+<!-- Location Management Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Locations & Delivery Fees (from Pasay Main Office)</h3>
+        {% if session.get('role') == 'superadmin' %}
+        <button class="btn btn-primary" id="addLocationBtn">
+            <i class="fas fa-plus"></i> Add Location
+        </button>
+        {% endif %}
+    </div>
+    <div class="locations-container" id="locationsContainer">
+        <div class="loading-placeholder">Loading locations...</div>
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">
+            <i class="fas fa-info-circle"></i> 
+            Delivery fee is charged from Pasay Main Office to the pickup location.
+        </small>
+    </div>
+</div>
+
+<!-- Durations Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Durations</h3>
+        {% if session.get('role') == 'superadmin' %}
+        <button class="btn btn-primary" id="addDurationBtn">
+            <i class="fas fa-plus"></i> Add Duration
+        </button>
+        {% endif %}
+    </div>
+    <div class="durations-container" id="durationsContainer">
+        <div class="loading-placeholder">Loading durations...</div>
+    </div>
+</div>
+
+<!-- Rate Table Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Rate Matrix</h3>
+        <div class="rate-filters">
+            <div class="filter-group">
+                <label>Pickup Location:</label>
+                <select id="pickupLocationSelect" class="filter-select">
+                    <option value="">-- Select Pickup Location --</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Dropoff Location:</label>
+                <select id="dropoffLocationSelect" class="filter-select">
+                    <option value="same">-- Same as Pickup Location --</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Unit Type:</label>
+                <select id="unitTypeFilterSelect" class="filter-select">
+                    <option value="all">-- All Unit Types --</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="rate-table" id="rateTable">
+            <thead id="tableHeader"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="pagination-container" id="paginationContainer">
+        <button class="pagination-btn" id="prevPageBtn" disabled>
+            <i class="fas fa-chevron-left"></i> Previous
+        </button>
+        <span class="pagination-info" id="paginationInfo">Page 1 of 1</span>
+        <button class="pagination-btn" id="nextPageBtn">
+            Next <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+    
+    <div class="rate-info">
+        <div class="info-box" id="priceCalculationInfo">
+            <i class="fas fa-calculator"></i>
+            <strong>Price Calculation:</strong>
+            <span id="calculationText">Select pickup and dropoff locations to see pricing</span>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="locationModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="locationModalTitle">Add Location</h3>
+            <button class="modal-close" id="closeLocationModal">&times;</button>
+        </div>
+        <form id="locationForm">
+            <input type="hidden" id="locationKey">
+            <div class="form-group">
+                <label for="locationName" class="form-label">Location Name *</label>
+                <input type="text" id="locationName" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label for="deliveryFeeFromPasay" class="form-label">Delivery Fee from Pasay (₱)</label>
+                <input type="number" id="deliveryFeeFromPasay" class="form-input" min="0" step="50" value="0">
+                <small>Fee charged when delivering vehicle from Pasay Main Office to this location</small>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelLocationBtn">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Location</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="durationModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Duration</h3>
+            <button class="modal-close" id="closeDurationModal">&times;</button>
+        </div>
+        <form id="durationForm">
+            <div class="form-group">
+                <label for="durationName" class="form-label">Duration Name</label>
+                <input type="text" id="durationName" class="form-input" placeholder="e.g., 2 Hours, 4 Hours" required>
+            </div>
+            <div class="form-group">
+                <label for="durationHours" class="form-label">Hours</label>
+                <input type="number" id="durationHours" class="form-input" placeholder="e.g., 2, 4, 6" required>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelDurationBtn">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Duration</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Seed Database Button -->
+<!-- {% if session.get('role') == 'superadmin' %}
+<div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+    <button id="seedDatabaseBtn" class="btn btn-secondary" style="background-color: #f59e0b; color: white;">
+        <i class="fas fa-database"></i> Seed Database
+    </button>
+</div>
+{% endif %} -->
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/car-rental-self-drive.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,142 @@
+<!-- Location Management Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Locations</h3>
+        {% if session.get('role') == 'superadmin' %}
+        <button class="btn btn-primary" id="addLocationBtnWD">
+            <i class="fas fa-plus"></i> Add Location
+        </button>
+        {% endif %}
+    </div>
+    <div class="locations-container" id="locationsContainerWD">
+        <div class="loading-placeholder">Loading locations...</div>
+    </div>
+</div>
+
+<!-- Durations Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Durations</h3>
+        {% if session.get('role') == 'superadmin' %}
+        <button class="btn btn-primary" id="addDurationBtnWD">
+            <i class="fas fa-plus"></i> Add Duration
+        </button>
+        {% endif %}
+    </div>
+    <div class="durations-container" id="durationsContainerWD">
+        <div class="loading-placeholder">Loading durations...</div>
+    </div>
+</div>
+
+<!-- Rate Table Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Rate Matrix</h3>
+        <div class="rate-filters">
+            <div class="filter-group">
+                <label>Rate Type:</label>
+                <div class="rate-type-switch">
+                    <button class="rate-type-btn active" data-rate-type="regular" id="regularRateBtnWD">Regular</button>
+                    <button class="rate-type-btn" data-rate-type="all_in" id="allInRateBtnWD">All-in</button>
+                </div>
+            </div>
+            <div class="filter-group">
+                <label>Pickup Location:</label>
+                <select id="pickupLocationSelectWD" class="filter-select">
+                    <option value="">-- Select Pickup Location --</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Dropoff Location:</label>
+                <select id="dropoffLocationSelectWD" class="filter-select">
+                    <option value="same">-- Same as Pickup Location --</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Unit Type:</label>
+                <select id="unitTypeFilterSelectWD" class="filter-select">
+                    <option value="all">-- All Unit Types --</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="rate-table" id="rateTableWD">
+            <thead id="tableHeaderWD"></thead>
+            <tbody id="tableBodyWD"></tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="pagination-container" id="paginationContainerWD">
+        <button class="pagination-btn" id="prevPageBtnWD" disabled>
+            <i class="fas fa-chevron-left"></i> Previous
+        </button>
+        <span class="pagination-info" id="paginationInfoWD">Page 1 of 1</span>
+        <button class="pagination-btn" id="nextPageBtnWD">
+            Next <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+    
+    <div class="rate-info">
+        <div class="info-box" id="priceCalculationInfoWD">
+            <i class="fas fa-calculator"></i>
+            <strong>Price Calculation:</strong>
+            <span id="calculationTextWD">Select pickup/dropoff locations and rate type to see pricing</span>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="locationModalWD" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="locationModalTitleWD">Add Location</h3>
+            <button class="modal-close" id="closeLocationModalWD">&times;</button>
+        </div>
+        <form id="locationFormWD">
+            <input type="hidden" id="locationKeyWD">
+            <div class="form-group">
+                <label for="locationNameWD" class="form-label">Location Name *</label>
+                <input type="text" id="locationNameWD" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label for="deliveryFeeFromPasayWD" class="form-label">Delivery Fee from Pasay (₱)</label>
+                <input type="number" id="deliveryFeeFromPasayWD" class="form-input" min="0" step="50" value="0">
+                <small>Fee charged when delivering vehicle from Pasay Main Office to this location</small>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelLocationBtnWD">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Location</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="durationModalWD" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Duration</h3>
+            <button class="modal-close" id="closeDurationModalWD">&times;</button>
+        </div>
+        <form id="durationFormWD">
+            <div class="form-group">
+                <label for="durationNameWD" class="form-label">Duration Name</label>
+                <input type="text" id="durationNameWD" class="form-input" placeholder="e.g., 2 Hours, 4 Hours" required>
+            </div>
+            <div class="form-group">
+                <label for="durationHoursWD" class="form-label">Hours</label>
+                <input type="number" id="durationHoursWD" class="form-input" placeholder="e.g., 2, 4, 6" required>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelDurationBtnWD">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Duration</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/car-rental-with-driver.js') }}"></script>
+{% endblock %}

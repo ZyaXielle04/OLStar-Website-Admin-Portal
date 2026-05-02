@@ -665,3 +665,85 @@
         font-size: 0.75rem;
     }
 }
+
+/* Tab/Content Switching */
+.rental-content {
+    display: none;
+}
+
+.rental-content.active {
+    display: block;
+}
+
+/* Rate Type Switch for With Driver */
+.rate-type-switch {
+    display: flex;
+    gap: 1rem;
+    background: #F1F5F9;
+    border-radius: 40px;
+    padding: 0.25rem;
+}
+
+.rate-type-btn {
+    padding: 0.5rem 1.5rem;
+    border-radius: 40px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    background: transparent;
+    color: #64748B;
+}
+
+.rate-type-btn.active {
+    background: #4F46E5;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rate-type-btn:hover:not(.active) {
+    background: #E2E8F0;
+}
+
+/* Rate Type Switch - For With Driver */
+.rate-type-switch {
+    display: flex;
+    gap: 0.25rem;
+    background: #F1F5F9;
+    border-radius: 40px;
+    padding: 0.25rem;
+}
+
+.rate-type-btn {
+    padding: 0.5rem 1.2rem;
+    border-radius: 40px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    background: transparent;
+    color: #64748B;
+}
+
+.rate-type-btn.active {
+    background: #4F46E5;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rate-type-btn:hover:not(.active) {
+    background: #E2E8F0;
+}
+
+.btn-danger {
+    background: #DC2626;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #B91C1C;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(220, 38, 38, 0.3);
+}

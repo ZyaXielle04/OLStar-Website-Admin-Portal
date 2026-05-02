@@ -326,13 +326,13 @@ def toggle_duration(hours_key):
         return jsonify({'error': str(e)}), 500
 
 
-# ========== RATE MANAGEMENT WITH SELF-DRIVE STRUCTURE ==========
+# ========== SELF-DRIVE RATE MANAGEMENT ==========
 
 @car_rental_api_bp.route('/rates', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
 def get_rates():
-    """Get all rates for transport units with self-drive structure"""
+    """Get all rates for self-drive transport units"""
     try:
         rates_ref = db.reference('rates/carRental/transportUnitRates/selfDrive')
         all_rates = rates_ref.get() or {}
@@ -349,6 +349,7 @@ def get_rates():
 def update_rate():
     """
     Update rate for a specific transport unit under self-drive.
+    If price is 0 or "0", the node will be deleted.
     
     Expected JSON:
     {
@@ -362,19 +363,28 @@ def update_rate():
     try:
         data = request.json
         transport_unit_id = data.get('transportUnitId')
-        rate_type = data.get('rateType')
+        rate_type = data.get('rateType')  # 'same_location' or 'different_location'
         location_key = data.get('locationKey')
         duration = str(data.get('duration'))
-        price = str(data.get('price', '0'))
+        price = data.get('price', '0')
         
         if not all([transport_unit_id, rate_type, location_key, duration, price is not None]):
             return jsonify({'error': 'Missing required fields'}), 400
         
         rate_path = f'rates/carRental/transportUnitRates/selfDrive/{transport_unit_id}/{rate_type}/{location_key}/{duration}'
         rate_ref = db.reference(rate_path)
-        rate_ref.set(price)
         
-        log_activity(f"Updated rate for unit {transport_unit_id}: {rate_type}/{location_key}/{duration}hrs = ₱{price}", 
+        # Check if price is 0 - delete the node
+        if str(price) == '0' or price == 0:
+            rate_ref.delete()
+            log_activity(f"Deleted self-drive rate for unit {transport_unit_id}: {rate_type}/{location_key}/{duration}hrs (price set to 0)", 
+                        session.get('user_id'), session.get('display_name'))
+            return jsonify({'message': 'Rate deleted successfully (price set to 0)'}), 200
+        
+        # Otherwise save the price as string
+        rate_ref.set(str(price))
+        
+        log_activity(f"Updated self-drive rate for unit {transport_unit_id}: {rate_type}/{location_key}/{duration}hrs = ₱{price}", 
                     session.get('user_id'), session.get('display_name'))
         
         return jsonify({'message': 'Rate updated successfully'}), 200
@@ -383,31 +393,117 @@ def update_rate():
         return jsonify({'error': str(e)}), 500
 
 
-@car_rental_api_bp.route('/rates/bulk', methods=['PUT'])
+# ========== WITH DRIVER RATE MANAGEMENT ==========
+
+@car_rental_api_bp.route('/with-driver/rates', methods=['GET'])
+@login_required_api
+@role_required_api(['superadmin', 'admin'])
+def get_with_driver_rates():
+    """
+    Get all rates for with-driver transport units.
+    Structure includes rateType (regular/all_in) as an additional level.
+    """
+    try:
+        rates_ref = db.reference('rates/carRental/transportUnitRates/withDriver')
+        all_rates = rates_ref.get() or {}
+        
+        return jsonify({'rates': all_rates})
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@car_rental_api_bp.route('/with-driver/rates', methods=['PUT'])
 @login_required_api
 @role_required_api(['superadmin'])
-def update_bulk_rates():
-    """Update multiple rates at once for a transport unit under self-drive."""
+def update_with_driver_rate():
+    """
+    Update rate for a specific transport unit under with-driver.
+    If price is 0 or "0", the node will be deleted.
+    
+    Expected JSON:
+    {
+        "transportUnitId": "BQM911",
+        "rateType": "regular",           # 'regular' or 'all_in'
+        "locationType": "same_location", # 'same_location' or 'different_location'
+        "locationKey": "manila",         # or 'manila_to_makati' for different location
+        "duration": "2",
+        "price": "500"
+    }
+    """
     try:
         data = request.json
         transport_unit_id = data.get('transportUnitId')
+        rate_type = data.get('rateType')          # 'regular' or 'all_in'
+        location_type = data.get('locationType')   # 'same_location' or 'different_location'
+        location_key = data.get('locationKey')     # 'manila' or 'manila_to_makati'
+        duration = str(data.get('duration'))
+        price = data.get('price', '0')
+        
+        if not all([transport_unit_id, rate_type, location_type, location_key, duration, price is not None]):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        rate_path = f'rates/carRental/transportUnitRates/withDriver/{transport_unit_id}/{rate_type}/{location_type}/{location_key}/{duration}'
+        rate_ref = db.reference(rate_path)
+        
+        # Check if price is 0 - delete the node
+        if str(price) == '0' or price == 0:
+            rate_ref.delete()
+            log_activity(f"Deleted with-driver rate for unit {transport_unit_id}: {rate_type}/{location_type}/{location_key}/{duration}hrs (price set to 0)", 
+                        session.get('user_id'), session.get('display_name'))
+            return jsonify({'message': 'Rate deleted successfully (price set to 0)'}), 200
+        
+        rate_ref.set(str(price))
+        
+        log_activity(f"Updated with-driver rate for unit {transport_unit_id}: {rate_type}/{location_type}/{location_key}/{duration}hrs = ₱{price}", 
+                    session.get('user_id'), session.get('display_name'))
+        
+        return jsonify({'message': 'Rate updated successfully'}), 200
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@car_rental_api_bp.route('/with-driver/rates/bulk', methods=['PUT'])
+@login_required_api
+@role_required_api(['superadmin'])
+def update_bulk_with_driver_rates():
+    """
+    Update multiple with-driver rates at once for a transport unit.
+    """
+    try:
+        data = request.json
+        transport_unit_id = data.get('transportUnitId')
+        rate_type = data.get('rateType')
         rates_data = data.get('rates', {})
         
-        if not transport_unit_id:
-            return jsonify({'error': 'Transport unit ID is required'}), 400
+        if not transport_unit_id or not rate_type:
+            return jsonify({'error': 'Transport unit ID and rate type are required'}), 400
         
-        base_path = f'rates/carRental/transportUnitRates/selfDrive/{transport_unit_id}'
+        base_path = f'rates/carRental/transportUnitRates/withDriver/{transport_unit_id}/{rate_type}'
         rates_ref = db.reference(base_path)
         
         formatted_rates = {}
         if 'same_location' in rates_data:
-            formatted_rates['same_location'] = rates_data['same_location']
+            formatted_rates['same_location'] = {}
+            for loc, durations in rates_data['same_location'].items():
+                formatted_rates['same_location'][loc] = {}
+                for dur, price in durations.items():
+                    if str(price) != '0' and price != 0:
+                        formatted_rates['same_location'][loc][dur] = str(price)
+        
         if 'different_location' in rates_data:
-            formatted_rates['different_location'] = rates_data['different_location']
+            formatted_rates['different_location'] = {}
+            for pair, durations in rates_data['different_location'].items():
+                formatted_rates['different_location'][pair] = {}
+                for dur, price in durations.items():
+                    if str(price) != '0' and price != 0:
+                        formatted_rates['different_location'][pair][dur] = str(price)
         
         rates_ref.set(formatted_rates)
         
-        log_activity(f"Bulk updated self-drive rates for unit {transport_unit_id}", session.get('user_id'), session.get('display_name'))
+        log_activity(f"Bulk updated with-driver {rate_type} rates for unit {transport_unit_id}", 
+                    session.get('user_id'), session.get('display_name'))
         
         return jsonify({'message': 'Bulk rates updated successfully'}), 200
     except Exception as e:
@@ -462,9 +558,13 @@ def get_table_data():
         
         durations.sort(key=lambda x: x['hours'])
         
-        # Get rates under selfDrive
-        rates_ref = db.reference('rates/carRental/transportUnitRates/selfDrive')
-        all_rates = rates_ref.get() or {}
+        # Get self-drive rates
+        self_drive_rates_ref = db.reference('rates/carRental/transportUnitRates/selfDrive')
+        self_drive_rates = self_drive_rates_ref.get() or {}
+        
+        # Get with-driver rates
+        with_driver_rates_ref = db.reference('rates/carRental/transportUnitRates/withDriver')
+        with_driver_rates = with_driver_rates_ref.get() or {}
         
         # Get locations
         locations_ref = db.reference('rates/carRental/locations')
@@ -499,7 +599,8 @@ def get_table_data():
         return jsonify({
             'transportUnits': transport_units,
             'durations': durations,
-            'rates': all_rates,
+            'rates': self_drive_rates,  # <- FIXED: Use 'rates' key for self-drive (matches frontend)
+            'withDriverRates': with_driver_rates,
             'locations': locations,
             'locationPairs': location_pairs
         })
@@ -514,7 +615,7 @@ def get_table_data():
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
 def calculate_price():
-    """Calculate the total rental price"""
+    """Calculate the total rental price for either self-drive or with-driver"""
     try:
         data = request.json
         transport_unit_id = data.get('transportUnitId')
@@ -522,23 +623,25 @@ def calculate_price():
         dropoff_location = data.get('dropoffLocation')
         hours = str(data.get('hours'))
         rental_type = data.get('rentalType', 'selfDrive')
+        rate_type = data.get('rateType', 'regular')
         
         if not all([transport_unit_id, pickup_location, dropoff_location, hours]):
             return jsonify({'error': 'Missing required fields'}), 400
         
-        rates_ref = db.reference(f'rates/carRental/transportUnitRates/{rental_type}/{transport_unit_id}')
+        is_different_location = pickup_location != dropoff_location
+        location_type = 'different_location' if is_different_location else 'same_location'
+        location_key = f"{pickup_location}_to_{dropoff_location}" if is_different_location else pickup_location
         
-        if pickup_location == dropoff_location:
-            rate_path = f'same_location/{pickup_location}/{hours}'
-            location_type = "same"
+        if rental_type == 'selfDrive':
+            rate_path = f'rates/carRental/transportUnitRates/selfDrive/{transport_unit_id}/{location_type}/{location_key}/{hours}'
+            rate_ref = db.reference(rate_path)
+            rate_str = rate_ref.get()
+            rate = int(rate_str) if rate_str else 0
         else:
-            location_pair = f"{pickup_location}_to_{dropoff_location}"
-            rate_path = f'different_location/{location_pair}/{hours}'
-            location_type = "different"
-        
-        rate_ref = rates_ref.child(rate_path)
-        rate_str = rate_ref.get()
-        rate = int(rate_str) if rate_str else 0
+            rate_path = f'rates/carRental/transportUnitRates/withDriver/{transport_unit_id}/{rate_type}/{location_type}/{location_key}/{hours}'
+            rate_ref = db.reference(rate_path)
+            rate_str = rate_ref.get()
+            rate = int(rate_str) if rate_str else 0
         
         delivery_fee_path = f'rates/carRental/locations/{pickup_location}/deliveryFeeFromPasay'
         delivery_fee_ref = db.reference(delivery_fee_path)
@@ -553,6 +656,7 @@ def calculate_price():
             'dropoffLocation': dropoff_location,
             'hours': int(hours),
             'rentalType': rental_type,
+            'rateType': rate_type if rental_type == 'withDriver' else None,
             'baseRate': rate,
             'deliveryFee': delivery_fee,
             'locationType': location_type,
@@ -569,7 +673,7 @@ def calculate_price():
 @login_required_api
 @role_required_api(['superadmin'])
 def seed_database():
-    """Seed the database with sample data"""
+    """Seed the database with sample data for both self-drive and with-driver"""
     try:
         sample_locations = {
             "pasay": {"name": "Pasay", "deliveryFeeFromPasay": "0", "isActive": "true"},
@@ -599,7 +703,7 @@ def seed_database():
         durations_ref = db.reference('rates/carRental/durations')
         durations_ref.set(sample_durations)
         
-        sample_rates = {
+        sample_self_drive_rates = {
             "BQM911": {
                 "same_location": {
                     "manila": {
@@ -678,27 +782,133 @@ def seed_database():
             }
         }
         
-        rates_ref = db.reference('rates/carRental/transportUnitRates/selfDrive')
-        rates_ref.set(sample_rates)
+        self_drive_rates_ref = db.reference('rates/carRental/transportUnitRates/selfDrive')
+        self_drive_rates_ref.set(sample_self_drive_rates)
         
-        log_activity("Seeded car rental database", session.get('user_id'), session.get('display_name'))
+        sample_with_driver_rates = {
+            "BQM911": {
+                "regular": {
+                    "same_location": {
+                        "manila": {
+                            "2": "800",
+                            "4": "1200",
+                            "6": "1500",
+                            "8": "1800",
+                            "12": "2200",
+                            "24": "3000",
+                            "48": "5200",
+                            "72": "7500"
+                        },
+                        "makati": {
+                            "2": "750",
+                            "4": "1150",
+                            "6": "1450",
+                            "8": "1750",
+                            "12": "2150",
+                            "24": "2900",
+                            "48": "5000",
+                            "72": "7200"
+                        },
+                        "pasay": {
+                            "2": "700",
+                            "4": "1100",
+                            "6": "1400",
+                            "8": "1700",
+                            "12": "2100",
+                            "24": "2800",
+                            "48": "4800",
+                            "72": "6900"
+                        }
+                    },
+                    "different_location": {
+                        "manila_to_makati": {
+                            "2": "1400",
+                            "4": "2200",
+                            "6": "2700",
+                            "8": "3300",
+                            "12": "4200",
+                            "24": "5700",
+                            "48": "9900",
+                            "72": "14100"
+                        },
+                        "manila_to_pasay": {
+                            "2": "1300",
+                            "4": "2100",
+                            "6": "2600",
+                            "8": "3200",
+                            "12": "4100",
+                            "24": "5400",
+                            "48": "9300",
+                            "72": "13200"
+                        }
+                    }
+                },
+                "all_in": {
+                    "same_location": {
+                        "manila": {
+                            "2": "1000",
+                            "4": "1500",
+                            "6": "1900",
+                            "8": "2300",
+                            "12": "2800",
+                            "24": "3800",
+                            "48": "6500",
+                            "72": "9400"
+                        },
+                        "makati": {
+                            "2": "950",
+                            "4": "1450",
+                            "6": "1850",
+                            "8": "2250",
+                            "12": "2750",
+                            "24": "3700",
+                            "48": "6300",
+                            "72": "9000"
+                        },
+                        "pasay": {
+                            "2": "900",
+                            "4": "1400",
+                            "6": "1800",
+                            "8": "2200",
+                            "12": "2700",
+                            "24": "3600",
+                            "48": "6100",
+                            "72": "8700"
+                        }
+                    },
+                    "different_location": {
+                        "manila_to_makati": {
+                            "2": "1800",
+                            "4": "2800",
+                            "6": "3400",
+                            "8": "4200",
+                            "12": "5300",
+                            "24": "7200",
+                            "48": "12400",
+                            "72": "17700"
+                        },
+                        "manila_to_pasay": {
+                            "2": "1700",
+                            "4": "2700",
+                            "6": "3300",
+                            "8": "4100",
+                            "12": "5200",
+                            "24": "6900",
+                            "48": "11700",
+                            "72": "16600"
+                        }
+                    }
+                }
+            }
+        }
         
-        return jsonify({'message': 'Database seeded successfully'}), 200
-    except Exception as e:
-        print(f"ERROR: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@car_rental_api_bp.route('/with-driver/rates', methods=['GET'])
-@login_required_api
-@role_required_api(['superadmin', 'admin'])
-def get_with_driver_rates():
-    """Get all rates for with-driver rentals (placeholder for future)"""
-    try:
-        rates_ref = db.reference('rates/carRental/transportUnitRates/withDriver')
-        all_rates = rates_ref.get() or {}
+        with_driver_rates_ref = db.reference('rates/carRental/transportUnitRates/withDriver')
+        with_driver_rates_ref.set(sample_with_driver_rates)
         
-        return jsonify({'rates': all_rates})
+        log_activity("Seeded car rental database with both self-drive and with-driver rates", 
+                    session.get('user_id'), session.get('display_name'))
+        
+        return jsonify({'message': 'Database seeded successfully with self-drive and with-driver rates'}), 200
     except Exception as e:
         print(f"ERROR: {str(e)}")
         return jsonify({'error': str(e)}), 500
