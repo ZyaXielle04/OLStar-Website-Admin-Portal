@@ -19,25 +19,66 @@
 <div class="dashboard-container">
     <div class="dashboard-header">
         <h1>Car Rental Rates</h1>
-        <p>Manage rental rates for Self-Drive and With Driver services</p>
-        <div class="rental-type-switch">
-            <button class="rental-type active" data-type="self-drive">Self-Drive</button>
-            <button class="rental-type" data-type="with-driver">With Driver</button>
-        </div>
+        <p>Manage rental rates for Car Rental services</p>
     </div>
 
-    <!-- Self-Drive Content -->
-    <div id="selfDriveContent" class="rental-content active">
+    <!-- Include the appropriate content based on the route -->
+    {% if request.path == '/rates/car-rental/self-drive' %}
         {% include "common/self_drive_content.html" %}
-    </div>
-
-    <!-- With Driver Content -->
-    <div id="withDriverContent" class="rental-content">
+    {% elif request.path == '/rates/car-rental/with-driver' %}
         {% include "common/with_driver_content.html" %}
-    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/car-rental.js') }}"></script>
+{% if request.path == '/rates/car-rental/self-drive' %}
+    <script src="{{ url_for('static', filename='js/car-rental-self-drive.js') }}"></script>
+    <script>
+        (function() {
+            // Wait for DOM to be fully loaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (typeof window.initializeSelfDrive === 'function') {
+                        console.log('Initializing Self Drive...');
+                        window.initializeSelfDrive();
+                    } else {
+                        console.error('initializeSelfDrive function not found');
+                    }
+                });
+            } else {
+                if (typeof window.initializeSelfDrive === 'function') {
+                    console.log('Initializing Self Drive...');
+                    window.initializeSelfDrive();
+                } else {
+                    console.error('initializeSelfDrive function not found');
+                }
+            }
+        })();
+    </script>
+{% elif request.path == '/rates/car-rental/with-driver' %}
+    <script src="{{ url_for('static', filename='js/car-rental-with-driver.js') }}"></script>
+    <script>
+        (function() {
+            // Wait for DOM to be fully loaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (typeof window.initializeWithDriver === 'function') {
+                        console.log('Initializing With Driver...');
+                        window.initializeWithDriver();
+                    } else {
+                        console.error('initializeWithDriver function not found');
+                    }
+                });
+            } else {
+                if (typeof window.initializeWithDriver === 'function') {
+                    console.log('Initializing With Driver...');
+                    window.initializeWithDriver();
+                } else {
+                    console.error('initializeWithDriver function not found');
+                }
+            }
+        })();
+    </script>
+{% endif %}
 {% endblock %}

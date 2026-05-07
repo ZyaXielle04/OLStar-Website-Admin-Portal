@@ -36,8 +36,18 @@
         }, 3000);
     }
     
-    function getSessionRole() {
-        return typeof window.getSessionRole === 'function' ? window.getSessionRole() : null;
+    async function getSessionRole() {
+        try {
+            const response = await fetch('/api/v1/auth/session/check');
+            const data = await response.json();
+            if (data.authenticated && data.user && data.user.role) {
+                return data.user.role;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error getting session role:', error);
+            return null;
+        }
     }
     
     function openModal(modalId) {
@@ -65,15 +75,12 @@
     // Custom confirmation modal
     function showConfirmModal(title, message, confirmText = 'Confirm', cancelText = 'Cancel') {
         return new Promise((resolve) => {
-            // Create modal overlay
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay';
             overlay.style.display = 'flex';
             
-            // Create unique IDs to avoid conflicts
             const uniqueId = 'confirm_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             
-            // Create modal content
             const modal = document.createElement('div');
             modal.className = 'modal';
             modal.style.maxWidth = '400px';
@@ -95,7 +102,6 @@
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
             
-            // Helper to close modal and resolve
             const complete = (result) => {
                 if (overlay && overlay.remove) {
                     overlay.remove();
@@ -103,7 +109,6 @@
                 resolve(result);
             };
             
-            // Add event listeners using data attributes
             const closeBtn = modal.querySelector(`[data-close="${uniqueId}"]`);
             const cancelBtn = modal.querySelector(`[data-cancel="${uniqueId}"]`);
             const confirmBtn = modal.querySelector(`[data-confirm="${uniqueId}"]`);
@@ -132,7 +137,6 @@
                 });
             }
             
-            // Close when clicking outside
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
                     complete(false);
@@ -171,7 +175,7 @@
             return;
         }
         
-        sessionRole = getSessionRole();
+        const isSuperadmin = sessionRole === 'superadmin';
         
         container.innerHTML = locations.map(location => `
             <div class="location-card">
@@ -183,7 +187,7 @@
                     ${location.isActive ? 'Active' : 'Inactive'}
                 </span>
                 <div class="location-actions">
-                    ${sessionRole === 'superadmin' ? `
+                    ${isSuperadmin ? `
                         <button class="btn-icon-sm" onclick="window.selfDrive.editLocation('${location.key}')"><i class="fas fa-edit"></i></button>
                         <button class="btn-icon-sm" onclick="window.selfDrive.toggleLocation('${location.key}')"><i class="fas ${location.isActive ? 'fa-ban' : 'fa-check-circle'}"></i></button>
                         <button class="btn-icon-sm" onclick="window.selfDrive.deleteLocation('${location.key}')"><i class="fas fa-trash"></i></button>
@@ -317,7 +321,6 @@
     }
     
     async function deleteLocation(locationKey) {
-        // Create custom confirmation modal
         const confirmed = await showConfirmModal(
             'Delete Location',
             `Are you sure you want to delete this location? This action cannot be undone.`,
@@ -361,7 +364,7 @@
             return;
         }
         
-        sessionRole = getSessionRole();
+        const isSuperadmin = sessionRole === 'superadmin';
         const sortedDurations = [...durations].sort((a, b) => a.hours - b.hours);
         
         container.innerHTML = sortedDurations.map(duration => `
@@ -374,7 +377,7 @@
                     ${duration.isActive ? 'Active' : 'Inactive'}
                 </span>
                 <div class="duration-actions">
-                    ${sessionRole === 'superadmin' ? `
+                    ${isSuperadmin ? `
                         <button class="btn-icon-sm" onclick="window.selfDrive.toggleDuration('${duration.key}')"><i class="fas ${duration.isActive ? 'fa-ban' : 'fa-check-circle'}"></i></button>
                         <button class="btn-icon-sm" onclick="window.selfDrive.deleteDuration('${duration.key}')"><i class="fas fa-trash"></i></button>
                     ` : ''}
@@ -549,7 +552,7 @@
         const filteredUnits = getFilteredTransportUnits();
         
         if (filteredUnits.length === 0) {
-            tbody.innerHTML = '<td><td colspan="100%" class="text-center">No transport units match the selected filter</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No transport units match the selected filter</td></tr>';
             return;
         }
         
@@ -627,7 +630,7 @@
                 const baseRate = getRateForUnit(unit.id, rateType, rateLocationKey, hourKey);
                 const totalPrice = baseRate + deliveryFee;
                 
-                rowsHtml += `<td class="rate-price" onclick="window.selfDrive.makeEditable(this, '${unit.id}', '${rateType}', '${rateLocationKey}', '${hourKey}', ${baseRate})">
+                rowsHtml += `<td class="rate-price" data-unit-id="${unit.id}" data-rate-type="${rateType}" data-location-key="${rateLocationKey}" data-duration-key="${hourKey}" data-current-rate="${baseRate}">
                     <div class="price-info">
                         <span class="base-price">Rate: ₱${formatNumber(baseRate)} (${duration.hours}hrs)</span><br>
                         <span class="total-price"><strong>Total: ₱${formatNumber(totalPrice)}</strong></span>
@@ -642,9 +645,23 @@
         tbody.innerHTML = rowsHtml;
     }
     
-    function makeEditable(element, unitId, rateType, locationKey, durationKey, currentBaseRate) {
-        sessionRole = getSessionRole();
-        if (sessionRole !== 'superadmin') return;
+    async function makeEditable(cell, unitId, rateType, locationKey, durationKey, currentBaseRate) {
+        // Get role directly from session instead of using cached variable
+        let role = null;
+        try {
+            const response = await fetch('/api/v1/auth/session/check');
+            const data = await response.json();
+            role = data.authenticated && data.user ? data.user.role : null;
+        } catch (error) {
+            console.error('Error checking role:', error);
+        }
+        
+        if (role !== 'superadmin') {
+            showNotification(`Only superadmin can edit rates. Your role: ${role || 'unknown'}`, 'error');
+            return;
+        }
+        
+        const originalContent = cell.innerHTML;
         
         const input = document.createElement('input');
         input.type = 'number';
@@ -652,10 +669,14 @@
         input.className = 'price-input';
         input.min = '0';
         input.step = '50';
+        input.style.width = '100%';
+        input.style.padding = '0.5rem';
+        input.style.fontSize = '14px';
         
-        element.innerHTML = '';
-        element.appendChild(input);
+        cell.innerHTML = '';
+        cell.appendChild(input);
         input.focus();
+        input.select();
         
         const savePrice = async () => {
             const newBaseRate = parseInt(input.value) || 0;
@@ -673,25 +694,39 @@
                     })
                 });
                 
-                if (!response.ok) throw new Error('Failed to save rate');
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to save rate');
+                }
                 
                 if (!currentData.rates[unitId]) currentData.rates[unitId] = {};
                 if (!currentData.rates[unitId][rateType]) currentData.rates[unitId][rateType] = {};
                 if (!currentData.rates[unitId][rateType][locationKey]) currentData.rates[unitId][rateType][locationKey] = {};
                 currentData.rates[unitId][rateType][locationKey][durationKey] = newBaseRate;
                 
-                showNotification('Rate saved successfully');
+                cell.setAttribute('data-current-rate', newBaseRate);
+                
+                showNotification('Rate saved successfully', 'success');
                 renderRateTable();
             } catch (error) {
-                showNotification('Failed to save rate', 'error');
-                renderRateTable();
+                console.error('Save error:', error);
+                showNotification(error.message, 'error');
+                cell.innerHTML = originalContent;
             }
+        };
+        
+        const cancelEdit = () => {
+            cell.innerHTML = originalContent;
         };
         
         input.addEventListener('blur', savePrice);
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
+                e.preventDefault();
                 savePrice();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
             }
         });
     }
@@ -763,6 +798,29 @@
         document.getElementById('prevPageBtn')?.addEventListener('click', goToPrevPage);
         document.getElementById('nextPageBtn')?.addEventListener('click', goToNextPage);
         
+        // Add click delegation for editable cells
+        const tableBodyElement = document.getElementById('tableBody');
+        if (tableBodyElement) {
+            tableBodyElement.addEventListener('click', function(e) {
+                const cell = e.target.closest('.rate-price');
+                if (!cell) return;
+                
+                // Check if we're already editing
+                if (cell.querySelector('input')) return;
+                
+                const unitId = cell.getAttribute('data-unit-id');
+                const rateType = cell.getAttribute('data-rate-type');
+                const locationKey = cell.getAttribute('data-location-key');
+                const durationKey = cell.getAttribute('data-duration-key');
+                const currentRate = parseInt(cell.getAttribute('data-current-rate')) || 0;
+                
+                if (unitId && rateType && locationKey && durationKey) {
+                    e.stopPropagation();
+                    makeEditable(cell, unitId, rateType, locationKey, durationKey, currentRate);
+                }
+            });
+        }
+        
         document.querySelectorAll('.modal-overlay').forEach(modal => {
             modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
         });
@@ -772,7 +830,9 @@
     async function initializeSelfDrive() {
         if (window.selfDriveInitialized) return;
         
-        sessionRole = getSessionRole();
+        console.log('Initializing Self Drive...');
+        sessionRole = await getSessionRole();
+        console.log('Session role:', sessionRole);
         
         await Promise.all([
             loadLocations(),
@@ -786,6 +846,7 @@
         initializeModals();
         
         window.selfDriveInitialized = true;
+        console.log('Self Drive initialized successfully');
     }
     
     async function refreshSelfDriveData() {

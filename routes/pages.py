@@ -177,10 +177,16 @@ def metro_manila_transfer_page():
 
 # ========== CAR RENTAL PAGES ==========
 
-@pages_bp.route('/rates/car-rental')
+@pages_bp.route('/rates/car-rental/self-drive')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def car_rental_page():
+def car_rental_self_drive_page():
+    return render_template('common/car_rental.html')
+
+@pages_bp.route('/rates/car-rental/with-driver')
+@login_required_page
+@role_required(['superadmin', 'admin'])
+def car_rental_with_driver_page():
     return render_template('common/car_rental.html')
 
 # ========== PENDING BOOKINGS PAGES ==========

@@ -747,3 +747,212 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 14px rgba(220, 38, 38, 0.3);
 }
+
+/* Danger button for delete confirmation */
+.btn-danger {
+    background: #DC2626;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #B91C1C;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(220, 38, 38, 0.3);
+}
+
+.service-type-toggle-container {
+    padding: 1rem;
+    text-align: center;
+}
+
+.toggle-switch {
+    display: inline-flex;
+    gap: 0;
+    background: #F1F5F9;
+    border-radius: 2rem;
+    padding: 0.25rem;
+    margin-bottom: 1rem;
+}
+
+.toggle-btn {
+    padding: 0.75rem 2rem;
+    border: none;
+    background: transparent;
+    border-radius: 2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #64748B;
+    font-family: inherit;
+}
+
+.toggle-btn i {
+    margin-right: 0.5rem;
+}
+
+.toggle-btn.active {
+    background: #4F46E5;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.service-description {
+    color: #64748B;
+    font-size: 0.875rem;
+}
+
+/* Package Type Switch (One Way / Round Trip / Tour) */
+.package-type-switch {
+    display: inline-flex;
+    gap: 0;
+    background: #F1F5F9;
+    border-radius: 2rem;
+    padding: 0.25rem;
+}
+
+.package-type-btn {
+    padding: 0.5rem 1.5rem;
+    border: none;
+    background: transparent;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #64748B;
+    font-family: inherit;
+}
+
+.package-type-btn i {
+    margin-right: 0.5rem;
+}
+
+.package-type-btn.active {
+    background: #4F46E5;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Rate Type Switch (Regular / All-in) - For both Metro and Provincial */
+.rate-type-switch {
+    display: inline-flex;
+    gap: 0;
+    background: #F1F5F9;
+    border-radius: 2rem;
+    padding: 0.25rem;
+}
+
+.rate-type-btn {
+    padding: 0.5rem 1.5rem;
+    border: none;
+    background: transparent;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #64748B;
+    font-family: inherit;
+}
+
+.rate-type-btn.active {
+    background: #4F46E5;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.rate-type-btn:hover:not(.active) {
+    background: #E2E8F0;
+}
+
+/* Rate Type Switch for Provincial */
+#provincialCardWD .rate-type-switch {
+    display: inline-flex;
+    gap: 0.25rem;
+    background: #F1F5F9;
+    border-radius: 40px;
+    padding: 0.25rem;
+}
+
+#provincialCardWD .rate-type-btn {
+    padding: 0.5rem 1.2rem;
+    border-radius: 40px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    background: transparent;
+    color: #64748B;
+}
+
+#provincialCardWD .rate-type-btn.active {
+    background: #4F46E5;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#provincialCardWD .rate-type-btn:hover:not(.active) {
+    background: #E2E8F0;
+}
+
+/* Destination Card Styles */
+.destination-card {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.destination-name {
+    font-weight: 600;
+    color: #1E293B;
+    font-size: 0.85rem;
+}
+
+.destination-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.destinations-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+/* Provincial table column min-width */
+#provincialRateTableWD th,
+#provincialRateTableWD td {
+    min-width: 150px;
+}
+
+.inactive-text {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.destination-status,
+.duration-status {
+    font-size: 0.6rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 20px;
+}
+
+.destination-status.active,
+.duration-status.active {
+    background: #DCFCE7;
+    color: #166534;
+}
+
+.destination-status.inactive,
+.duration-status.inactive {
+    background: #FEE2E2;
+    color: #991B1B;
+}
