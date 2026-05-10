@@ -1,27 +1,9 @@
 from flask import Blueprint, request, jsonify, session
-from functools import wraps
 from firebase_admin import db
 from datetime import datetime
+from backend.decorators import login_required_api, role_required_api, no_rate_limit
 
 car_rental_self_drive_api_bp = Blueprint('car_rental_self_drive', __name__, url_prefix='/common/car-rental')
-
-def login_required_api(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required_api(allowed_roles):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'role' not in session or session['role'] not in allowed_roles:
-                return jsonify({'error': 'Forbidden'}), 403
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
 
 def log_activity(description, user_id, user_name):
     try:
@@ -41,6 +23,7 @@ def log_activity(description, user_id, user_name):
 @car_rental_self_drive_api_bp.route('/locations', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_locations():
     """Get all locations for car rental self-drive"""
     try:
@@ -73,6 +56,7 @@ def get_locations():
 @car_rental_self_drive_api_bp.route('/locations', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def add_location():
     """Add a new location - Superadmin only"""
     try:
@@ -108,6 +92,7 @@ def add_location():
 @car_rental_self_drive_api_bp.route('/locations/<location_key>', methods=['PUT'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def update_location(location_key):
     """Update location details - Superadmin only"""
     try:
@@ -139,6 +124,7 @@ def update_location(location_key):
 @car_rental_self_drive_api_bp.route('/locations/<location_key>', methods=['DELETE'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def delete_location(location_key):
     """Delete a location - Superadmin only"""
     try:
@@ -161,6 +147,7 @@ def delete_location(location_key):
 @car_rental_self_drive_api_bp.route('/locations/<location_key>/toggle', methods=['PATCH'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def toggle_location(location_key):
     """Toggle location active status - Superadmin only"""
     try:
@@ -197,6 +184,7 @@ def toggle_location(location_key):
 @car_rental_self_drive_api_bp.route('/transport-units', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_transport_units():
     """Get all transport units and extract unit types"""
     try:
@@ -239,6 +227,7 @@ def get_transport_units():
 @car_rental_self_drive_api_bp.route('/durations', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_durations():
     """Get all durations for car rental self-drive - using numeric keys (hours)"""
     try:
@@ -273,6 +262,7 @@ def get_durations():
 @car_rental_self_drive_api_bp.route('/durations', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def add_duration():
     """Add a new duration - Superadmin only"""
     try:
@@ -307,6 +297,7 @@ def add_duration():
 @car_rental_self_drive_api_bp.route('/durations/<int:hours_key>', methods=['DELETE'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def delete_duration(hours_key):
     """Delete a duration - Superadmin only"""
     try:
@@ -329,6 +320,7 @@ def delete_duration(hours_key):
 @car_rental_self_drive_api_bp.route('/durations/<int:hours_key>/toggle', methods=['PATCH'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def toggle_duration(hours_key):
     """Toggle duration active status - Superadmin only"""
     try:
@@ -365,6 +357,7 @@ def toggle_duration(hours_key):
 @car_rental_self_drive_api_bp.route('/rates', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_rates():
     """Get all rates for self-drive transport units"""
     try:
@@ -380,6 +373,7 @@ def get_rates():
 @car_rental_self_drive_api_bp.route('/rates', methods=['PUT'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def update_rate():
     """
     Update rate for a specific transport unit under self-drive.
@@ -421,6 +415,7 @@ def update_rate():
 @car_rental_self_drive_api_bp.route('/table-data', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_table_data():
     """Get complete data for rates table"""
     try:
@@ -524,6 +519,7 @@ def get_table_data():
 @car_rental_self_drive_api_bp.route('/calculate-price', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def calculate_price():
     """Calculate the total rental price for self-drive"""
     try:
@@ -575,6 +571,7 @@ def calculate_price():
 @car_rental_self_drive_api_bp.route('/seed-database', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def seed_database():
     """Seed the database with sample data for self-drive"""
     try:

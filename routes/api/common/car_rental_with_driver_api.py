@@ -2,26 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from functools import wraps
 from firebase_admin import db
 from datetime import datetime
-
-# Import decorators from self-drive file (or redefine them)
-# For now, let's redefine them to avoid circular imports
-def login_required_api(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({'error': 'Unauthorized'}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-def role_required_api(allowed_roles):
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'role' not in session or session['role'] not in allowed_roles:
-                return jsonify({'error': 'Forbidden'}), 403
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
+from backend.decorators import login_required_api, role_required_api, no_rate_limit
 
 def log_activity(description, user_id, user_name):
     try:
@@ -44,6 +25,7 @@ car_rental_with_driver_api_bp = Blueprint('car_rental_with_driver', __name__, ur
 @car_rental_with_driver_api_bp.route('/locations', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_locations():
     """Get all locations for Metro Manila with-driver"""
     try:
@@ -70,6 +52,7 @@ def get_locations():
 @car_rental_with_driver_api_bp.route('/locations', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def add_location():
     """Add a new Metro Manila location - Superadmin only"""
     try:
@@ -103,6 +86,7 @@ def add_location():
 @car_rental_with_driver_api_bp.route('/locations/<location_key>', methods=['PUT'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def update_location(location_key):
     """Update Metro Manila location details - Superadmin only"""
     try:
@@ -132,6 +116,7 @@ def update_location(location_key):
 @car_rental_with_driver_api_bp.route('/locations/<location_key>', methods=['DELETE'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def delete_location(location_key):
     """Delete a Metro Manila location - Superadmin only"""
     try:
@@ -154,6 +139,7 @@ def delete_location(location_key):
 @car_rental_with_driver_api_bp.route('/locations/<location_key>/toggle', methods=['PATCH'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def toggle_location(location_key):
     """Toggle Metro Manila location active status - Superadmin only"""
     try:
@@ -185,6 +171,7 @@ def toggle_location(location_key):
 @car_rental_with_driver_api_bp.route('/durations', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_durations():
     """Get all durations for with-driver Metro Manila"""
     try:
@@ -219,6 +206,7 @@ def get_durations():
 @car_rental_with_driver_api_bp.route('/durations', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def add_duration():
     """Add a new duration - Superadmin only"""
     try:
@@ -253,6 +241,7 @@ def add_duration():
 @car_rental_with_driver_api_bp.route('/durations/<int:hours_key>', methods=['DELETE'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def delete_duration(hours_key):
     """Delete a duration - Superadmin only"""
     try:
@@ -275,6 +264,7 @@ def delete_duration(hours_key):
 @car_rental_with_driver_api_bp.route('/durations/<int:hours_key>/toggle', methods=['PATCH'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def toggle_duration(hours_key):
     """Toggle duration active status - Superadmin only"""
     try:
@@ -311,6 +301,7 @@ def toggle_duration(hours_key):
 @car_rental_with_driver_api_bp.route('/metro-manila/rates', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_metro_manila_rates():
     """Get all Metro Manila rates for with-driver"""
     try:
@@ -325,6 +316,7 @@ def get_metro_manila_rates():
 @car_rental_with_driver_api_bp.route('/metro-manila/rates', methods=['PUT'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def update_metro_manila_rate():
     """
     Update Metro Manila rate for with-driver.
@@ -365,6 +357,7 @@ def update_metro_manila_rate():
 @car_rental_with_driver_api_bp.route('/provincial/destinations', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_provincial_destinations():
     """Get all provincial destinations"""
     try:
@@ -397,6 +390,7 @@ def get_provincial_destinations():
 @car_rental_with_driver_api_bp.route('/provincial/destinations', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def add_provincial_destination():
     """Add a new provincial destination - Superadmin only"""
     try:
@@ -429,6 +423,7 @@ def add_provincial_destination():
 @car_rental_with_driver_api_bp.route('/provincial/destinations/<destination_key>', methods=['DELETE'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def delete_provincial_destination(destination_key):
     """Delete a provincial destination - Superadmin only"""
     try:
@@ -453,6 +448,7 @@ def delete_provincial_destination(destination_key):
 @car_rental_with_driver_api_bp.route('/provincial/rates', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_provincial_rates():
     """Get all Provincial rates for with-driver"""
     try:
@@ -467,6 +463,7 @@ def get_provincial_rates():
 @car_rental_with_driver_api_bp.route('/provincial/rates', methods=['PUT'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def update_provincial_rate():
     """
     Update Provincial rate for with-driver.
@@ -507,6 +504,7 @@ def update_provincial_rate():
 @car_rental_with_driver_api_bp.route('/rates/all', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
+@no_rate_limit
 def get_all_rates():
     """Get all with-driver rates (both Metro Manila and Provincial)"""
     try:
@@ -530,6 +528,7 @@ def get_all_rates():
 @car_rental_with_driver_api_bp.route('/seed-database', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def seed_database():
     """Seed the database with sample data for with-driver"""
     try:
@@ -580,6 +579,7 @@ def seed_database():
 @car_rental_with_driver_api_bp.route('/provincial/destinations/<destination_key>/toggle', methods=['PATCH'])
 @login_required_api
 @role_required_api(['superadmin'])
+@no_rate_limit
 def toggle_provincial_destination(destination_key):
     """Toggle provincial destination active status - Superadmin only"""
     try:
