@@ -1,3 +1,5 @@
+<!-- package_form.html -->
+
 {% extends "base.html" %}
 
 {% block title %}{% if package_id %}Edit Package{% else %}Create Package{% endif %} | OLStar Portal{% endblock %}
@@ -5,6 +7,52 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/packages.css') }}">
+<style>
+.vehicle-types-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.vehicle-type-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.vehicle-type-card:hover {
+    border-color: #2563eb;
+    background: #f8fbff;
+}
+
+.vehicle-type-card.active {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+.vehicle-type-card input {
+    width: 18px;
+    height: 18px;
+}
+
+.vehicle-type-info h4 {
+    margin: 0;
+    font-size: 15px;
+}
+
+.vehicle-type-info p {
+    margin: 0.2rem 0 0;
+    font-size: 12px;
+    color: #6b7280;
+}
+</style>
 {% endblock %}
 
 {% block sidebar_links %}
@@ -47,13 +95,50 @@
                            placeholder="e.g., 2" min="0" required>
                 </div>
             </div>
+
+            <!-- VEHICLE TYPES -->
+            <div class="form-group">
+                <label class="form-label">Vehicle Types *</label>
+
+                <div class="vehicle-types-grid">
+
+                    <label class="vehicle-type-card" id="cardSUV">
+                        <input type="checkbox" value="SUV" class="vehicleTypeCheckbox">
+                        <div class="vehicle-type-info">
+                            <h4>SUV / MPV</h4>
+                            <p>Suitable for family & group rides</p>
+                        </div>
+                    </label>
+
+                    <label class="vehicle-type-card" id="cardSedan">
+                        <input type="checkbox" value="Sedan" class="vehicleTypeCheckbox">
+                        <div class="vehicle-type-info">
+                            <h4>Sedan</h4>
+                            <p>Comfortable standard transport</p>
+                        </div>
+                    </label>
+
+                    <label class="vehicle-type-card" id="cardVan">
+                        <input type="checkbox" value="Van" class="vehicleTypeCheckbox">
+                        <div class="vehicle-type-info">
+                            <h4>Van</h4>
+                            <p>Large capacity transport</p>
+                        </div>
+                    </label>
+
+                </div>
+
+                <small>You can select multiple vehicle types.</small>
+            </div>
             
             <div class="modal-buttons">
                 <button type="button" class="btn btn-secondary" id="cancelBtn">
                     <i class="fas fa-times"></i> Cancel
                 </button>
+
                 <button type="submit" class="btn btn-primary" id="submitBtn">
-                    <i class="fas fa-save"></i> {% if package_id %}Update Package{% else %}Create Package{% endif %}
+                    <i class="fas fa-save"></i>
+                    {% if package_id %}Update Package{% else %}Create Package{% endif %}
                 </button>
             </div>
         </form>
@@ -64,68 +149,106 @@
 {% block extra_js %}
 <script>
     const packageId = '{{ package_id }}' || null;
-    
+
+    function updateVehicleTypeCards() {
+        document.querySelectorAll('.vehicle-type-card').forEach(card => {
+            const checkbox = card.querySelector('input');
+
+            if (checkbox.checked) {
+                card.classList.add('active');
+            } else {
+                card.classList.remove('active');
+            }
+        });
+    }
+
+    document.querySelectorAll('.vehicleTypeCheckbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateVehicleTypeCards);
+    });
+
     // Load package data if editing
     if (packageId) {
         fetch(`/api/common/packages/${packageId}`)
             .then(response => response.json())
             .then(data => {
                 const pkg = data.package;
+
                 document.getElementById('packageId').value = pkg.id || '';
                 document.getElementById('packageName').value = pkg.packageName || '';
                 document.getElementById('maxPax').value = pkg.maxPax || '';
                 document.getElementById('maxLuggage').value = pkg.maxLuggage || '';
+
+                // LOAD VEHICLE TYPES
+                if (pkg.vehicleTypes && Array.isArray(pkg.vehicleTypes)) {
+                    document.querySelectorAll('.vehicleTypeCheckbox').forEach(cb => {
+                        cb.checked = pkg.vehicleTypes.includes(cb.value);
+                    });
+
+                    updateVehicleTypeCards();
+                }
             })
             .catch(error => {
                 console.error('Error loading package:', error);
                 toastError('Failed to load package data', 'Error');
             });
     }
-    
+
     // Handle form submission
     document.getElementById('packageForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const packageName = document.getElementById('packageName').value;
         const maxPax = parseInt(document.getElementById('maxPax').value);
         const maxLuggage = parseInt(document.getElementById('maxLuggage').value);
-        
+
+        const vehicleTypes = Array.from(
+            document.querySelectorAll('.vehicleTypeCheckbox:checked')
+        ).map(cb => cb.value);
+
         // Validation
         if (!packageName) {
             toastError('Please enter a package name', 'Validation Error');
             return;
         }
-        
+
         if (isNaN(maxPax) || maxPax < 1) {
             toastError('Max passengers must be at least 1', 'Validation Error');
             return;
         }
-        
+
         if (isNaN(maxLuggage) || maxLuggage < 0) {
             toastError('Max luggage cannot be negative', 'Validation Error');
             return;
         }
-        
+
+        if (vehicleTypes.length === 0) {
+            toastError('Please select at least one vehicle type', 'Validation Error');
+            return;
+        }
+
         // Disable submit button
         const submitBtn = document.getElementById('submitBtn');
         const originalText = submitBtn.innerHTML;
+
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-        
+
         try {
             let url = '/api/common/packages';
             let method = 'POST';
+
             let body = {
                 packageName: packageName,
                 maxPax: maxPax,
-                maxLuggage: maxLuggage
+                maxLuggage: maxLuggage,
+                vehicleTypes: vehicleTypes
             };
-            
+
             if (packageId) {
                 url = `/api/common/packages/${packageId}`;
                 method = 'PUT';
             }
-            
+
             const response = await fetch(url, {
                 method: method,
                 headers: {
@@ -133,33 +256,39 @@
                 },
                 body: JSON.stringify(body)
             });
-            
+
             const data = await response.json();
-            
+
             if (response.ok) {
                 if (!packageId) {
                     toastSuccess(`Package created with ID: ${data.package_id}`, 'Success');
                 } else {
                     toastSuccess(data.message || 'Package updated successfully', 'Success');
                 }
+
                 setTimeout(() => {
                     window.location.href = '/packages';
                 }, 1500);
+
             } else {
                 toastError(data.error || data.message || 'Failed to save package', 'Error');
             }
+
         } catch (error) {
             console.error('Error saving package:', error);
             toastError('An unexpected error occurred', 'Error');
+
         } finally {
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         }
     });
-    
+
     // Cancel button
     document.getElementById('cancelBtn').addEventListener('click', function() {
         window.location.href = '/packages';
     });
+
+    updateVehicleTypeCards();
 </script>
 {% endblock %}

@@ -1,12 +1,28 @@
 <a href="/dashboard" class="nav-link {% if request.endpoint == 'pages.superadmin_dashboard' or request.endpoint == 'pages.admin_dashboard' or request.path == '/dashboard' %}active{% endif %}">
     <i class="fas fa-tachometer-alt"></i> Dashboard
 </a>
-<a href="/users" class="nav-link {% if request.path == '/users' or request.path.startswith('/users/') %}active{% endif %}">
-    <i class="fas fa-users"></i> User Management
-</a>
+
+<!-- User Management (ADMIN ONLY) -->
+<details class="nav-group" {% if request.path.startswith('/users/') %}open{% endif %}>
+    <summary>
+        <i class="fas fa-users"></i> User Management
+    </summary>
+
+    <div class="nav-submenu">
+        <a href="/users/customers" class="nav-sublink {% if request.path == '/users/customers' %}active{% endif %}">
+            <i class="fas fa-user"></i> Customers
+        </a>
+
+        <a href="/users/drivers" class="nav-sublink {% if request.path == '/users/drivers' %}active{% endif %}">
+            <i class="fas fa-id-card"></i> Drivers
+        </a>
+    </div>
+</details>
+
 <a href="/transport-units" class="nav-link {% if request.path == '/transport-units' or request.path.startswith('/transport-units/') %}active{% endif %}">
     <i class="fas fa-truck"></i> Transport Units
 </a>
+
 <a href="/packages" class="nav-link {% if request.path == '/packages' or request.path.startswith('/packages/') %}active{% endif %}">
     <i class="fas fa-box"></i> Packages
 </a>
@@ -16,37 +32,50 @@
     <summary>
         <i class="fas fa-tag"></i> Rates
     </summary>
+
     <div class="nav-submenu">
-        <a href="/rates/airport-transfer" class="nav-sublink {% if request.path == '/rates/airport-transfer' %}active{% endif %}">
+
+        <a href="/rates/airport-transfer"
+           class="nav-sublink {% if request.path == '/rates/airport-transfer' %}active{% endif %}">
             <i class="fas fa-plane"></i> Airport Transfer
         </a>
-        <a href="/rates/metro-manila-transfer" class="nav-sublink {% if request.path == '/rates/metro-manila-transfer' %}active{% endif %}">
+
+        <a href="/rates/metro-manila-transfer"
+           class="nav-sublink {% if request.path == '/rates/metro-manila-transfer' %}active{% endif %}">
             <i class="fas fa-map-marker-alt"></i> Metro Manila Transfer
         </a>
-        <a href="/rates/car-rental/self-drive" class="nav-sublink {% if request.path == '/rates/car-rental/self-drive' %}active{% endif %}">
+
+        <a href="/rates/car-rental/self-drive"
+           class="nav-sublink {% if request.path == '/rates/car-rental/self-drive' %}active{% endif %}">
             <i class="fas fa-key"></i> Car Rental (Self-Drive)
         </a>
-        <a href="/rates/car-rental/with-driver" class="nav-sublink {% if request.path == '/rates/car-rental/with-driver' %}active{% endif %}">
+
+        <a href="/rates/car-rental/with-driver"
+           class="nav-sublink {% if request.path == '/rates/car-rental/with-driver' %}active{% endif %}">
             <i class="fas fa-user"></i> Car Rental (With Driver)
         </a>
+
     </div>
 </details>
 
 <!-- Booking Details Dropdown -->
-<details class="nav-group" {% if request.path.startswith('/pending-bookings') or request.path.startswith('/booking-history') %}open{% endif %}>
+<details class="nav-group"
+         {% if request.path.startswith('/pending-bookings') or request.path.startswith('/booking-history') %}open{% endif %}>
     <summary>
         <i class="fas fa-calendar-alt"></i> Bookings
     </summary>
+
     <div class="nav-submenu">
-        <a href="/pending-bookings" class="nav-sublink {% if request.path == '/pending-bookings' or request.path.startswith('/pending-bookings/') %}active{% endif %}">
+
+        <a href="/pending-bookings"
+           class="nav-sublink {% if request.path == '/pending-bookings' or request.path.startswith('/pending-bookings/') %}active{% endif %}">
             <i class="fas fa-clock"></i> Pending Bookings
         </a>
-        <a href="/booking-history" class="nav-sublink {% if request.path == '/booking-history' or request.path.startswith('/booking-history/') %}active{% endif %}">
+
+        <a href="/booking-history"
+           class="nav-sublink {% if request.path == '/booking-history' or request.path.startswith('/booking-history/') %}active{% endif %}">
             <i class="fas fa-history"></i> Booking History
         </a>
+
     </div>
 </details>
-
-<a href="/settings" class="nav-link {% if request.path == '/settings' or request.path.startswith('/settings/') %}active{% endif %}">
-    <i class="fas fa-sliders-h"></i> System Settings
-</a>

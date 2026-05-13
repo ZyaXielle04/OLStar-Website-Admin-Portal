@@ -17,33 +17,47 @@
 
 {% block content %}
 <div class="dashboard-container">
+
     <div class="dashboard-header">
         <h1>Package Details</h1>
-        <p>View detailed information about the package</p>
+        <p>View detailed package information</p>
     </div>
-    
+
     <div class="card">
+
         <div class="details-container" id="detailsContainer">
+
             <div class="skeleton-details">
                 <div class="skeleton-line"></div>
                 <div class="skeleton-line"></div>
                 <div class="skeleton-line"></div>
                 <div class="skeleton-line"></div>
             </div>
+
         </div>
-        
+
         <div class="modal-buttons">
-            <button type="button" class="btn btn-secondary" id="backBtn">
-                <i class="fas fa-arrow-left"></i> Back to List
+
+            <button type="button"
+                    class="btn btn-secondary"
+                    id="backBtn">
+
+                <i class="fas fa-arrow-left"></i>
+                Back to List
+
             </button>
+
             {% if session.get('role') == 'superadmin' %}
-            <button type="button" class="btn btn-primary" id="editBtn">
-                <i class="fas fa-edit"></i> Edit Package
-            </button>
-            <button type="button" class="btn btn-primary" id="manageUnitsBtn">
-                <i class="fas fa-truck"></i> Manage Transport Units
+            <button type="button"
+                    class="btn btn-primary"
+                    id="editBtn">
+
+                <i class="fas fa-edit"></i>
+                Edit Package
+
             </button>
             {% endif %}
+
         </div>
     </div>
 </div>
@@ -51,158 +65,214 @@
 
 {% block extra_js %}
 <script>
+
     const packageId = '{{ package_id }}';
-    
+
     async function loadPackageDetails() {
-        const container = document.getElementById('detailsContainer');
-        
+
+        const container =
+            document.getElementById('detailsContainer');
+
         try {
-            const response = await fetch(`/api/common/packages/${packageId}`);
-            
+
+            const response =
+                await fetch(`/api/common/packages/${packageId}`);
+
             if (!response.ok) {
-                throw new Error('Failed to load package details');
+                throw new Error('Failed to load package');
             }
-            
+
             const data = await response.json();
+
             const pkg = data.package;
-            
-            // Build units table HTML
-            let unitsHtml = '';
-            if (pkg.transportUnits && pkg.transportUnits.length > 0) {
-                unitsHtml = `
-                    <div class="details-section">
-                        <h3><i class="fas fa-truck"></i> Assigned Transport Units</h3>
-                        <div class="table-responsive">
-                            <table class="data-table mini-table">
-                                <thead>
-                                    <tr>
-                                        <th>Unit ID</th>
-                                        <th>Transport Unit</th>
-                                        <th>Plate Number</th>
-                                        <th>Color</th>
-                                        <th>Type</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${pkg.transportUnits.map(unit => `
-                                        <tr>
-                                            <td><strong>${escapeHtml(unit.transportUnitId)}</strong></td>
-                                            <td>${escapeHtml(unit.transportUnit)}</td>
-                                            <td>${escapeHtml(unit.plateNumber)}</td>
-                                            <td>${escapeHtml(unit.color)}</td>
-                                            <td>${escapeHtml(unit.unitType)}</td>
-                                            <td><span class="badge ${unit.isAvailable ? 'badge-available' : 'badge-unavailable'}">${unit.isAvailable ? 'Available' : 'Unavailable'}</span></td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                `;
-            } else {
-                unitsHtml = `
-                    <div class="details-section">
-                        <h3><i class="fas fa-truck"></i> Assigned Transport Units</h3>
-                        <div class="empty-state">No transport units assigned to this package yet.</div>
-                    </div>
-                `;
-            }
-            
+
             container.innerHTML = `
                 <div class="details-grid">
+
                     <div class="details-card">
+
                         <div class="details-header">
+
                             <i class="fas fa-box"></i>
-                            <h2>${escapeHtml(pkg.packageName || 'N/A')}</h2>
-                            <span class="badge badge-info">${escapeHtml(pkg.id)}</span>
+
+                            <h2>
+                                ${escapeHtml(pkg.packageName || 'N/A')}
+                            </h2>
+
+                            <span class="badge badge-info">
+                                ${escapeHtml(pkg.id)}
+                            </span>
+
                         </div>
-                        
+
                         <div class="details-section">
-                            <h3><i class="fas fa-info-circle"></i> Package Information</h3>
+
+                            <h3>
+                                <i class="fas fa-info-circle"></i>
+                                Package Information
+                            </h3>
+
                             <div class="details-row">
-                                <div class="details-label">Package ID:</div>
-                                <div class="details-value"><strong>${escapeHtml(pkg.id || 'N/A')}</strong></div>
+                                <div class="details-label">
+                                    Package ID:
+                                </div>
+
+                                <div class="details-value">
+                                    <strong>
+                                        ${escapeHtml(pkg.id || 'N/A')}
+                                    </strong>
+                                </div>
                             </div>
+
                             <div class="details-row">
-                                <div class="details-label">Package Name:</div>
-                                <div class="details-value">${escapeHtml(pkg.packageName || 'N/A')}</div>
+                                <div class="details-label">
+                                    Package Name:
+                                </div>
+
+                                <div class="details-value">
+                                    ${escapeHtml(pkg.packageName || 'N/A')}
+                                </div>
                             </div>
+
                             <div class="details-row">
-                                <div class="details-label">Max Passengers:</div>
-                                <div class="details-value"><i class="fas fa-users"></i> ${pkg.maxPax || 0} pax</div>
+                                <div class="details-label">
+                                    Vehicle Type:
+                                </div>
+
+                                <div class="details-value">
+                                    ${escapeHtml(pkg.vehicleType || 'N/A')}
+                                </div>
                             </div>
+
                             <div class="details-row">
-                                <div class="details-label">Max Luggage:</div>
-                                <div class="details-value"><i class="fas fa-suitcase"></i> ${pkg.maxLuggage || 0} pieces</div>
+                                <div class="details-label">
+                                    Max Passengers:
+                                </div>
+
+                                <div class="details-value">
+                                    <i class="fas fa-users"></i>
+                                    ${pkg.maxPax || 0} pax
+                                </div>
                             </div>
+
+                            <div class="details-row">
+                                <div class="details-label">
+                                    Max Luggage:
+                                </div>
+
+                                <div class="details-value">
+                                    <i class="fas fa-suitcase"></i>
+                                    ${pkg.maxLuggage || 0} pieces
+                                </div>
+                            </div>
+
                         </div>
-                        
-                        ${unitsHtml}
-                        
+
                         <div class="details-section">
-                            <h3><i class="fas fa-history"></i> Audit Information</h3>
+
+                            <h3>
+                                <i class="fas fa-history"></i>
+                                Audit Information
+                            </h3>
+
                             <div class="details-row">
-                                <div class="details-label">Created At:</div>
-                                <div class="details-value">${pkg.created_at ? new Date(pkg.created_at).toLocaleString() : 'N/A'}</div>
+                                <div class="details-label">
+                                    Created At:
+                                </div>
+
+                                <div class="details-value">
+                                    ${pkg.created_at ? new Date(pkg.created_at).toLocaleString() : 'N/A'}
+                                </div>
                             </div>
+
                             <div class="details-row">
-                                <div class="details-label">Created By:</div>
-                                <div class="details-value">${escapeHtml(pkg.created_by_name || pkg.created_by || 'N/A')}</div>
+                                <div class="details-label">
+                                    Created By:
+                                </div>
+
+                                <div class="details-value">
+                                    ${escapeHtml(pkg.created_by_name || pkg.created_by || 'N/A')}
+                                </div>
                             </div>
+
                             ${pkg.updated_at ? `
                             <div class="details-row">
-                                <div class="details-label">Last Updated:</div>
-                                <div class="details-value">${new Date(pkg.updated_at).toLocaleString()}</div>
+                                <div class="details-label">
+                                    Last Updated:
+                                </div>
+
+                                <div class="details-value">
+                                    ${new Date(pkg.updated_at).toLocaleString()}
+                                </div>
                             </div>
+
                             <div class="details-row">
-                                <div class="details-label">Updated By:</div>
-                                <div class="details-value">${escapeHtml(pkg.updated_by_name || pkg.updated_by || 'N/A')}</div>
+                                <div class="details-label">
+                                    Updated By:
+                                </div>
+
+                                <div class="details-value">
+                                    ${escapeHtml(pkg.updated_by_name || pkg.updated_by || 'N/A')}
+                                </div>
                             </div>
                             ` : ''}
+
                         </div>
                     </div>
                 </div>
             `;
+
         } catch (error) {
-            console.error('Error loading package details:', error);
+
+            console.error(error);
+
             container.innerHTML = `
                 <div class="error-state">
                     <i class="fas fa-exclamation-triangle"></i>
                     <p>Failed to load package details</p>
                 </div>
             `;
-            toastError('Failed to load package details', 'Error');
+
+            toastError(
+                'Failed to load package details',
+                'Error'
+            );
         }
     }
-    
+
     function escapeHtml(str) {
+
         if (!str) return '';
+
         const div = document.createElement('div');
+
         div.textContent = str;
+
         return div.innerHTML;
     }
-    
-    // Event listeners
-    document.getElementById('backBtn').addEventListener('click', function() {
+
+    document.getElementById('backBtn')
+        .addEventListener('click', function() {
+
         window.location.href = '/packages';
     });
-    
-    const editBtn = document.getElementById('editBtn');
+
+    const editBtn =
+        document.getElementById('editBtn');
+
     if (editBtn) {
+
         editBtn.addEventListener('click', function() {
-            window.location.href = `/packages/${packageId}/edit`;
+
+            window.location.href =
+                `/packages/${packageId}/edit`;
         });
     }
-    
-    const manageUnitsBtn = document.getElementById('manageUnitsBtn');
-    if (manageUnitsBtn) {
-        manageUnitsBtn.addEventListener('click', function() {
-            window.location.href = `/packages/${packageId}/units`;
-        });
-    }
-    
-    // Load details on page load
-    document.addEventListener('DOMContentLoaded', loadPackageDetails);
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        loadPackageDetails
+    );
+
 </script>
 {% endblock %}

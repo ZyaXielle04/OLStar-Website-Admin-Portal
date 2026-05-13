@@ -1,0 +1,5 @@
+{% extends "users/base_users.html" %}
+
+{% set page_title = "Admins" %}
+{% set user_type = "admins" %}
+{% set allow_add_user = session.get('role') == 'superadmin' %}

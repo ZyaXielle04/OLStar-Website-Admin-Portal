@@ -171,7 +171,7 @@ auth_limiter.init_app(app)
 # -----------------------
 app.register_blueprint(auth_bp)
 app.register_blueprint(pages_bp)
-app.register_blueprint(api_bp)  # Register the new API blueprint
+app.register_blueprint(api_bp)
 
 # -----------------------
 # Inject CSRF token cookie for JS
