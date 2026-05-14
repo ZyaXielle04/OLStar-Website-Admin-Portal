@@ -75,6 +75,7 @@ def get_user(user_id):
             "fullName": db_user.get("fullName"),
             "email": user_record.email,
             "role": db_user.get("role"),
+            "transportUnitId": db_user.get("transportUnitId"),  # Add this line
             "createdAt": db_user.get("createdAt")
         })
 
@@ -117,6 +118,7 @@ def create_user():
             "fullName": full_name,
             "email": email,
             "role": role,
+            "transportUnitId": data.get("transportUnitId"),  # Add this line
             "createdAt": datetime.datetime.utcnow().isoformat()
         })
 
@@ -155,7 +157,8 @@ def update_user(user_id):
         db.reference(f"users/{user_id}").update({
             "fullName": full_name,
             "email": email,
-            "role": role
+            "role": role,
+            "transportUnitId": data.get("transportUnitId")  # Add this line
         })
 
         return jsonify({"success": True})
