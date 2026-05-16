@@ -7,12 +7,16 @@ let allCategories = [];
 let currentCategoryFilter = 'all';
 let activeEditCell = null;
 let isSaving = false;
+let currentDiscountData = null;
+let currentCategoryDiscountKey = null;
+let currentCategoryDiscountName = null;
 
 const userRole = document.querySelector('.user-role')?.innerText?.toLowerCase() || 'admin';
 
 document.addEventListener('DOMContentLoaded', function() {
     loadPackages();
     loadCategories();
+    loadDiscountSettings();
     setupEventListeners();
 });
 
@@ -101,6 +105,9 @@ function renderCategories() {
                                 <i class="fas fa-tag"></i>
                             </button>
                             ${userRole === 'superadmin' ? `
+                            <button class="btn-area-discount" onclick="editAreaDiscount('${category.key}', '${areaKey}', '${escapeHtml(areaDisplayName)}')" title="Set Area Discount">
+                                <i class="fas fa-percent"></i>
+                            </button>
                             <button class="btn-area-delete" onclick="deleteArea('${category.key}', '${areaKey}')" title="Delete Area">
                                 <i class="fas fa-trash"></i>
                             </button>
@@ -126,6 +133,9 @@ function renderCategories() {
             <div class="category-actions">
                 <button class="btn-icon-sm" onclick="openAreaModal('${category.key}', '${escapeHtml(category.name)}')">
                     <i class="fas fa-plus"></i> Add Area
+                </button>
+                <button class="btn-icon-sm" onclick="editCategoryDiscount('${category.key}', '${escapeHtml(category.name)}')">
+                    <i class="fas fa-percent"></i> Set Category Discount
                 </button>
                 <button class="btn-icon-sm" onclick="toggleCategoryStatus('${category.key}', ${isActive})">
                     <i class="fas fa-power-off"></i> ${isActive ? 'Deactivate' : 'Activate'}
@@ -202,7 +212,7 @@ async function renderFareMatrix() {
         if (!tbody) return;
         
         if (matrix.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center">No fare data available<\/td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">No fare data available</td></tr>';
             return;
         }
         
@@ -212,19 +222,77 @@ async function renderFareMatrix() {
             Object.entries(areas).forEach(([areaKey, areaData]) => {
                 const areaDisplayName = areaData.name || areaKey;
                 const prices = areaData.prices || {};
+                const discountedPrices = areaData.discountedPrices || null;
+                const hasDiscount = discountedPrices && discountedPrices.discountedPrice;
+                
+                // Build discount badge text
+                let discountBadgeText = '';
+                if (hasDiscount) {
+                    const discountType = discountedPrices.discountType;
+                    const discountValue = discountedPrices.value;
+                    
+                    if (discountType === 'percentage') {
+                        discountBadgeText = `${discountValue}% OFF`;
+                    } else if (discountType === 'fixed') {
+                        discountBadgeText = `₱${parseFloat(discountValue).toLocaleString()} OFF`;
+                    }
+                }
+                
                 bodyHtml += '<tr>';
-                bodyHtml += `<td class="area-cell"><strong>${escapeHtml(areaDisplayName)}</strong><br><small>${escapeHtml(category.name)}</small><\/td>`;
+                bodyHtml += `<td class="area-cell">
+                    <strong>${escapeHtml(areaDisplayName)}</strong>
+                    <br><small>${escapeHtml(category.name)}</small>
+                    ${hasDiscount ? `<span class="discount-badge"><i class="fas fa-tag"></i> ${discountBadgeText ? `(${discountBadgeText})` : ''}</span>` : ''}
+                 </td>`;
+                
                 packages.forEach(pkg => {
-                    const price = prices[pkg.name] || "0";
-                    const priceDisplay = price !== "0" ? `₱${parseInt(price).toLocaleString()}` : '₱0';
+                    let originalPrice = prices[pkg.name] || "0";
+                    let displayHtml = '';
+                    let discountBadge = '';
+                    let dataPrice = originalPrice;
+                    
+                    // Check if there's a discounted price
+                    if (hasDiscount && discountedPrices.discountedPrice && discountedPrices.discountedPrice[pkg.name]) {
+                        const discountedPrice = discountedPrices.discountedPrice[pkg.name];
+                        const originalPriceNum = parseFloat(originalPrice);
+                        const discountedPriceNum = parseFloat(discountedPrice);
+                        
+                        if (originalPriceNum > 0 && discountedPriceNum > 0 && originalPriceNum !== discountedPriceNum) {
+                            // Show both original (strikethrough, 50% opacity) and discounted price
+                            displayHtml = `
+                                <div class="price-container">
+                                    <span class="original-price">₱${originalPriceNum.toLocaleString()}</span>
+                                    <span class="discounted-price">₱${discountedPriceNum.toLocaleString()}</span>
+                                </div>
+                            `;
+                            discountBadge = `<span class="discount-indicator" title="Discounted: ${discountedPrices.discountType === 'percentage' ? discountedPrices.value + '% OFF' : '₱' + parseFloat(discountedPrices.value).toLocaleString() + ' OFF'}">
+                                <i class="fas fa-percent"></i>
+                            </span>`;
+                            dataPrice = discountedPrice; // Store discounted price for editing
+                        } else {
+                            // Just show discounted price if original is 0 or same
+                            displayHtml = `<span class="price-display">₱${discountedPriceNum.toLocaleString()}</span>`;
+                            discountBadge = `<span class="discount-indicator" title="Discounted: ${discountedPrices.discountType === 'percentage' ? discountedPrices.value + '% OFF' : '₱' + parseFloat(discountedPrices.value).toLocaleString() + ' OFF'}">
+                                <i class="fas fa-percent"></i>
+                            </span>`;
+                            dataPrice = discountedPrice;
+                        }
+                    } else {
+                        // No discount, show original price
+                        const priceNum = parseFloat(originalPrice);
+                        displayHtml = `<span class="price-display">${priceNum !== 0 ? `₱${priceNum.toLocaleString()}` : '₱0'}</span>`;
+                        dataPrice = originalPrice;
+                    }
+                    
                     bodyHtml += `
-                        <td class="price-cell ${userRole === 'superadmin' ? 'editable' : ''}" 
+                        <td class="price-cell ${userRole === 'superadmin' ? 'editable' : ''} ${hasDiscount ? 'has-discount' : ''}" 
                             data-category="${category.key}"
                             data-area="${areaKey}"
                             data-package="${escapeHtml(pkg.name)}"
-                            data-price="${price}">
-                            <span class="price-display">${priceDisplay}</span>
-                        <\/td>
+                            data-price="${dataPrice}">
+                            ${displayHtml}
+                            ${discountBadge}
+                         </td>
                     `;
                 });
                 bodyHtml += '</tr>';
@@ -247,9 +315,481 @@ async function renderFareMatrix() {
         console.error('Error rendering fare matrix:', error);
         const tbody = document.getElementById('matrixBody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center error-state">Failed to load fare matrix<\/td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center error-state">Failed to load fare matrix</td></tr>';
         }
     }
+}
+
+// ========== Global Discount Management Functions ==========
+
+async function loadDiscountSettings() {
+    try {
+        const response = await fetch('/api/common/airport-transfer/global-discount');
+        const data = await response.json();
+        
+        if (data.hasDiscount) {
+            currentDiscountData = data.discount;
+            renderDiscountInfo(currentDiscountData);
+        } else {
+            renderNoDiscount();
+        }
+    } catch (error) {
+        console.error('Error loading discount settings:', error);
+        renderNoDiscount();
+    }
+}
+
+function renderDiscountInfo(discount) {
+    const container = document.getElementById('discountContainer');
+    if (!container) return;
+    
+    if (!discount) {
+        renderNoDiscount();
+        return;
+    }
+    
+    const discountValue = discount.discountType === 'percentage' 
+        ? `${discount.value}% OFF` 
+        : `₱${parseFloat(discount.value).toLocaleString()} OFF`;
+    
+    const discountClass = discount.discountType === 'percentage' ? 'percentage' : 'fixed';
+    
+    let validityHtml = '';
+    if (discount.validUntil) {
+        const validUntil = new Date(discount.validUntil);
+        const today = new Date();
+        const isExpired = validUntil < today;
+        validityHtml = `
+            <div class="discount-validity">
+                <i class="fas ${isExpired ? 'fa-exclamation-triangle' : 'fa-calendar-alt'}"></i>
+                Valid until: ${validUntil.toLocaleDateString()}
+                ${isExpired ? '<span style="color: #ef4444;"> (Expired)</span>' : ''}
+            </div>
+        `;
+    }
+    
+    container.innerHTML = `
+        <div class="discount-info">
+            <div class="discount-info-item">
+                <span class="discount-label">Current Discount:</span>
+                <span class="discount-value ${discountClass}">${discountValue}</span>
+            </div>
+            ${discount.description ? `
+            <div class="discount-info-item">
+                <span class="discount-label">Description:</span>
+                <span class="discount-description">${escapeHtml(discount.description)}</span>
+            </div>
+            ` : ''}
+            ${validityHtml}
+            <div class="discount-info-item">
+                <span class="discount-label">Created:</span>
+                <span class="discount-date">${new Date(discount.createdAt).toLocaleDateString()}</span>
+            </div>
+            ${userRole === 'superadmin' ? `
+            <div class="discount-actions" style="margin-top: 0.75rem;">
+                <button class="btn-icon-sm" onclick="openDiscountModal()">
+                    <i class="fas fa-edit"></i> Edit Discount
+                </button>
+                <button class="btn-icon-sm btn-danger" onclick="removeGlobalDiscount()">
+                    <i class="fas fa-trash"></i> Remove Discount
+                </button>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function renderNoDiscount() {
+    const container = document.getElementById('discountContainer');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="no-discount">
+            <i class="fas fa-tag" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+            <p>No active global discount</p>
+            <small>Click Edit to add a global discount that will apply to all areas</small>
+            ${userRole === 'superadmin' ? `
+            <div class="discount-actions" style="margin-top: 0.75rem;">
+                <button class="btn-icon-sm" onclick="openDiscountModal()">
+                    <i class="fas fa-plus"></i> Add Global Discount
+                </button>
+            </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function openDiscountModal() {
+    const modal = document.getElementById('discountModal');
+    if (!modal) return;
+    
+    if (currentDiscountData) {
+        document.getElementById('discountType').value = currentDiscountData.discountType || 'percentage';
+        document.getElementById('discountValue').value = currentDiscountData.value || '';
+        document.getElementById('discountDescription').value = currentDiscountData.description || '';
+        document.getElementById('discountValidUntil').value = currentDiscountData.validUntil || '';
+    } else {
+        document.getElementById('discountForm').reset();
+        document.getElementById('discountType').value = 'percentage';
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeDiscountModal() {
+    const modal = document.getElementById('discountModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function saveGlobalDiscount(e) {
+    e.preventDefault();
+    
+    const discountType = document.getElementById('discountType').value;
+    const discountValue = document.getElementById('discountValue').value;
+    const description = document.getElementById('discountDescription').value;
+    const validUntil = document.getElementById('discountValidUntil').value;
+    
+    if (!discountValue) {
+        toastError('Discount value is required', 'Validation Error');
+        return;
+    }
+    
+    const valueNum = parseFloat(discountValue);
+    if (discountType === 'percentage' && (valueNum < 0 || valueNum > 100)) {
+        toastError('Percentage must be between 0 and 100', 'Validation Error');
+        return;
+    }
+    
+    if (discountType === 'fixed' && valueNum < 0) {
+        toastError('Fixed discount cannot be negative', 'Validation Error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/common/airport-transfer/global-discount', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                discountType,
+                value: discountValue,
+                description,
+                validUntil,
+                applyToAll: true
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            toastSuccess('Global discount applied to all areas successfully!', 'Success');
+            closeDiscountModal();
+            loadDiscountSettings();
+            loadCategories();
+            renderFareMatrix();
+        } else {
+            toastError(data.error || 'Failed to save discount settings', 'Error');
+        }
+    } catch (error) {
+        console.error('Error saving discount:', error);
+        toastError('An unexpected error occurred', 'Error');
+    }
+}
+
+async function removeGlobalDiscount() {
+    showConfirmModal({
+        title: 'Remove Global Discount',
+        message: 'Are you sure you want to remove the global discount? This will remove discount from all areas.',
+        confirmText: 'Remove',
+        confirmIcon: 'fa-trash',
+        cancelText: 'Cancel',
+        type: 'danger',
+        onConfirm: async () => {
+            try {
+                const response = await fetch('/api/common/airport-transfer/global-discount?removeFromAreas=true', {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    toastSuccess('Global discount removed successfully', 'Success');
+                    loadDiscountSettings();
+                    loadCategories();
+                    renderFareMatrix();
+                } else {
+                    toastError(data.error || 'Failed to remove discount', 'Error');
+                }
+            } catch (error) {
+                console.error('Error removing discount:', error);
+                toastError('An unexpected error occurred', 'Error');
+            }
+        }
+    });
+}
+
+// ========== Category Discount Functions ==========
+
+async function editCategoryDiscount(categoryKey, categoryName) {
+    currentCategoryDiscountKey = categoryKey;
+    currentCategoryDiscountName = categoryName;
+    
+    const modal = document.getElementById('categoryDiscountModal');
+    if (!modal) return;
+    
+    document.getElementById('categoryDiscountModalTitle').textContent = `Set Discount for Category: ${categoryName}`;
+    document.getElementById('categoryDiscountKey').value = categoryKey;
+    // Remove this line: document.getElementById('categoryDiscountName').value = categoryName;
+    
+    // Check if category already has a discount
+    try {
+        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/discount`);
+        const data = await response.json();
+        
+        if (data.hasDiscount) {
+            document.getElementById('categoryDiscountType').value = data.discount.discountType || 'percentage';
+            document.getElementById('categoryDiscountValue').value = data.discount.value || '';
+            document.getElementById('categoryDiscountDescription').value = data.discount.description || '';
+            document.getElementById('categoryDiscountValidUntil').value = data.discount.validUntil || '';
+        } else {
+            document.getElementById('categoryDiscountForm').reset();
+            document.getElementById('categoryDiscountType').value = 'percentage';
+            document.getElementById('categoryDiscountValue').value = '';
+            document.getElementById('categoryDiscountDescription').value = '';
+            document.getElementById('categoryDiscountValidUntil').value = '';
+        }
+        document.getElementById('overrideAreaDiscounts').checked = false;
+    } catch (error) {
+        // No existing discount
+        document.getElementById('categoryDiscountForm').reset();
+        document.getElementById('categoryDiscountType').value = 'percentage';
+        document.getElementById('categoryDiscountValue').value = '';
+        document.getElementById('categoryDiscountDescription').value = '';
+        document.getElementById('categoryDiscountValidUntil').value = '';
+        document.getElementById('overrideAreaDiscounts').checked = false;
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeCategoryDiscountModal() {
+    const modal = document.getElementById('categoryDiscountModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    currentCategoryDiscountKey = null;
+    currentCategoryDiscountName = null;
+}
+
+async function saveCategoryDiscount(e) {
+    e.preventDefault();
+    
+    const categoryKey = document.getElementById('categoryDiscountKey').value;
+    const discountType = document.getElementById('categoryDiscountType').value;
+    const discountValue = document.getElementById('categoryDiscountValue').value;
+    const description = document.getElementById('categoryDiscountDescription').value;
+    const validUntil = document.getElementById('categoryDiscountValidUntil').value;
+    const overrideAreaDiscounts = document.getElementById('overrideAreaDiscounts')?.checked || false;
+    
+    if (!discountValue) {
+        toastError('Discount value is required', 'Validation Error');
+        return;
+    }
+    
+    const valueNum = parseFloat(discountValue);
+    if (discountType === 'percentage' && (valueNum < 0 || valueNum > 100)) {
+        toastError('Percentage must be between 0 and 100', 'Validation Error');
+        return;
+    }
+    
+    if (discountType === 'fixed' && valueNum < 0) {
+        toastError('Fixed discount cannot be negative', 'Validation Error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/discount`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                discountType,
+                value: discountValue,
+                description,
+                validUntil,
+                overrideAreaDiscounts
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            toastSuccess(`Category discount applied to all areas under ${currentCategoryDiscountName}!`, 'Success');
+            closeCategoryDiscountModal();
+            loadCategories();
+            renderFareMatrix();
+        } else {
+            toastError(data.error || 'Failed to apply category discount', 'Error');
+        }
+    } catch (error) {
+        console.error('Error saving category discount:', error);
+        toastError('An unexpected error occurred', 'Error');
+    }
+}
+
+async function removeCategoryDiscount() {
+    if (!currentCategoryDiscountKey) return;
+    
+    showConfirmModal({
+        title: 'Remove Category Discount',
+        message: `Are you sure you want to remove the discount for category "${currentCategoryDiscountName}"? This will remove discounts from all areas in this category.`,
+        confirmText: 'Remove',
+        confirmIcon: 'fa-trash',
+        cancelText: 'Cancel',
+        type: 'danger',
+        onConfirm: async () => {
+            try {
+                const response = await fetch(`/api/common/airport-transfer/categories/${currentCategoryDiscountKey}/discount`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    toastSuccess('Category discount removed successfully', 'Success');
+                    closeCategoryDiscountModal();
+                    loadCategories();
+                    renderFareMatrix();
+                } else {
+                    toastError(data.error || 'Failed to remove category discount', 'Error');
+                }
+            } catch (error) {
+                console.error('Error removing category discount:', error);
+                toastError('An unexpected error occurred', 'Error');
+            }
+        }
+    });
+}
+
+// ========== Area Discount Functions ==========
+
+async function editAreaDiscount(categoryKey, areaKey, areaName) {
+    try {
+        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`);
+        const data = await response.json();
+        const discountData = data.discountedPrices || {};
+        
+        const modal = document.getElementById('areaDiscountModal');
+        if (!modal) return;
+        
+        document.getElementById('areaDiscountModalTitle').textContent = `Set Discount for ${areaName}`;
+        document.getElementById('areaDiscountCategoryKey').value = categoryKey;
+        document.getElementById('areaDiscountAreaKey').value = areaKey;
+        
+        if (discountData && discountData.discountType) {
+            document.getElementById('areaDiscountType').value = discountData.discountType;
+            document.getElementById('areaDiscountValue').value = discountData.value;
+            document.getElementById('areaDiscountDescription').value = discountData.description || '';
+            document.getElementById('areaDiscountValidUntil').value = discountData.validUntil || '';
+        } else {
+            document.getElementById('areaDiscountForm').reset();
+            document.getElementById('areaDiscountType').value = 'percentage';
+        }
+        
+        modal.style.display = 'flex';
+    } catch (error) {
+        console.error('Error loading area discount:', error);
+        toastError('Failed to load discount data', 'Error');
+    }
+}
+
+function closeAreaDiscountModal() {
+    const modal = document.getElementById('areaDiscountModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function saveAreaDiscount(e) {
+    e.preventDefault();
+    
+    const categoryKey = document.getElementById('areaDiscountCategoryKey').value;
+    const areaKey = document.getElementById('areaDiscountAreaKey').value;
+    const discountType = document.getElementById('areaDiscountType').value;
+    const discountValue = document.getElementById('areaDiscountValue').value;
+    const description = document.getElementById('areaDiscountDescription').value;
+    const validUntil = document.getElementById('areaDiscountValidUntil').value;
+    
+    if (!discountValue) {
+        toastError('Discount value is required', 'Validation Error');
+        return;
+    }
+    
+    const valueNum = parseFloat(discountValue);
+    if (discountType === 'percentage' && (valueNum < 0 || valueNum > 100)) {
+        toastError('Percentage must be between 0 and 100', 'Validation Error');
+        return;
+    }
+    
+    if (discountType === 'fixed' && valueNum < 0) {
+        toastError('Fixed discount cannot be negative', 'Validation Error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                discountType,
+                value: discountValue,
+                description,
+                validUntil
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            toastSuccess('Discount applied successfully!', 'Success');
+            closeAreaDiscountModal();
+            loadCategories();
+            renderFareMatrix();
+        } else {
+            toastError(data.error || 'Failed to apply discount', 'Error');
+        }
+    } catch (error) {
+        console.error('Error saving area discount:', error);
+        toastError('An unexpected error occurred', 'Error');
+    }
+}
+
+async function removeAreaDiscount(categoryKey, areaKey, areaName) {
+    showConfirmModal({
+        title: 'Remove Discount',
+        message: `Are you sure you want to remove the discount for "${areaName}"?`,
+        confirmText: 'Remove',
+        confirmIcon: 'fa-trash',
+        cancelText: 'Cancel',
+        type: 'danger',
+        onConfirm: async () => {
+            try {
+                const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    toastSuccess('Discount removed successfully', 'Success');
+                    loadCategories();
+                    renderFareMatrix();
+                } else {
+                    toastError(data.error || 'Failed to remove discount', 'Error');
+                }
+            } catch (error) {
+                console.error('Error removing discount:', error);
+                toastError('An unexpected error occurred', 'Error');
+            }
+        }
+    });
 }
 
 // ========== Inline Editing Functions ==========
@@ -349,7 +889,7 @@ async function savePriceEdit(cell, newValue, categoryKey, areaKey, packageName) 
         const currentPrices = currentData.prices || {};
         
         // Update the specific package price
-        currentPrices[packageName] = price.toString();  // Send as string
+        currentPrices[packageName] = price.toString();
         
         // Save all prices back
         const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`, {
@@ -367,6 +907,8 @@ async function savePriceEdit(cell, newValue, categoryKey, areaKey, packageName) 
             const priceDisplay = price ? `₱${price.toLocaleString()}` : '₱0';
             cell.innerHTML = `<span class="price-display">${priceDisplay}</span>`;
             toastSuccess(`Updated price for ${packageName}`, 'Success');
+            // Refresh matrix to show updated discount calculations if any
+            renderFareMatrix();
         } else {
             toastError(data.error || 'Failed to update price', 'Error');
             cancelEdit(cell);
@@ -388,23 +930,46 @@ function setupEventListeners() {
         currentCategoryFilter = this.value;
         renderFareMatrix();
     });
+    document.getElementById('editDiscountBtn')?.addEventListener('click', () => openDiscountModal());
     
+    // Category Modal
     document.getElementById('closeCategoryModal')?.addEventListener('click', closeCategoryModal);
     document.getElementById('cancelCategoryBtn')?.addEventListener('click', closeCategoryModal);
     document.getElementById('categoryForm')?.addEventListener('submit', saveCategory);
     
+    // Area Modal
     document.getElementById('closeAreaModal')?.addEventListener('click', closeAreaModal);
     document.getElementById('cancelAreaBtn')?.addEventListener('click', closeAreaModal);
     document.getElementById('areaForm')?.addEventListener('submit', saveArea);
     
+    // Prices Modal
     document.getElementById('closePricesModal')?.addEventListener('click', closePricesModal);
     document.getElementById('cancelPricesBtn')?.addEventListener('click', closePricesModal);
     document.getElementById('pricesForm')?.addEventListener('submit', savePrices);
     
+    // Global Discount Modal
+    document.getElementById('closeDiscountModal')?.addEventListener('click', closeDiscountModal);
+    document.getElementById('cancelDiscountBtn')?.addEventListener('click', closeDiscountModal);
+    document.getElementById('discountForm')?.addEventListener('submit', saveGlobalDiscount);
+    
+    // Area Discount Modal
+    document.getElementById('closeAreaDiscountModal')?.addEventListener('click', closeAreaDiscountModal);
+    document.getElementById('cancelAreaDiscountBtn')?.addEventListener('click', closeAreaDiscountModal);
+    document.getElementById('areaDiscountForm')?.addEventListener('submit', saveAreaDiscount);
+    
+    // Category Discount Modal
+    document.getElementById('closeCategoryDiscountModal')?.addEventListener('click', closeCategoryDiscountModal);
+    document.getElementById('cancelCategoryDiscountBtn')?.addEventListener('click', closeCategoryDiscountModal);
+    document.getElementById('categoryDiscountForm')?.addEventListener('submit', saveCategoryDiscount);
+    
+    // Close modals when clicking outside
     window.addEventListener('click', (e) => {
         if (e.target === document.getElementById('categoryModal')) closeCategoryModal();
         if (e.target === document.getElementById('areaModal')) closeAreaModal();
         if (e.target === document.getElementById('pricesModal')) closePricesModal();
+        if (e.target === document.getElementById('discountModal')) closeDiscountModal();
+        if (e.target === document.getElementById('areaDiscountModal')) closeAreaDiscountModal();
+        if (e.target === document.getElementById('categoryDiscountModal')) closeCategoryDiscountModal();
     });
 }
 
@@ -557,17 +1122,17 @@ async function saveArea(e) {
     }
 }
 
-async function deleteArea(categoryKey, areaName) {
+async function deleteArea(categoryKey, areaKey) {
     showConfirmModal({
         title: 'Delete Area',
-        message: `Are you sure you want to delete "${areaName}"? All fare prices for this area will also be deleted.`,
+        message: `Are you sure you want to delete this area? All fare prices for this area will also be deleted.`,
         confirmText: 'Delete',
         confirmIcon: 'fa-trash',
         cancelText: 'Cancel',
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaName}`, {
+                const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -589,15 +1154,24 @@ async function deleteArea(categoryKey, areaName) {
 
 // ========== Price Functions (Legacy - kept for compatibility) ==========
 
-async function editAreaPrices(categoryKey, areaName) {
+async function editAreaPrices(categoryKey, areaKey) {
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaName}/prices`);
+        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`);
         const data = await response.json();
         const currentPrices = data.prices || {};
         
+        // Get area name from categories data
+        let areaName = areaKey;
+        for (const category of allCategories) {
+            if (category.key === categoryKey && category.areas && category.areas[areaKey]) {
+                areaName = category.areas[areaKey].name || areaKey;
+                break;
+            }
+        }
+        
         document.getElementById('pricesModalTitle').textContent = `Fare Prices: ${areaName}`;
         document.getElementById('pricesCategoryKey').value = categoryKey;
-        document.getElementById('pricesAreaKey').value = areaName;
+        document.getElementById('pricesAreaKey').value = areaKey;
         
         // Sort packages: Economy first, then Comfort, then Bus, then by number within each group
         const getTypeAndNumber = (name) => {
@@ -661,6 +1235,8 @@ async function savePrices(e) {
         const value = parseInt(input.value);
         if (!isNaN(value) && value > 0) {
             prices[packageName] = value;
+        } else {
+            prices[packageName] = 0;
         }
     });
     

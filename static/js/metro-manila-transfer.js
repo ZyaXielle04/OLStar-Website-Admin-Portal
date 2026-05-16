@@ -1,5 +1,5 @@
 // ============================================
-// Metro Manila Transfer Rates Management - FULLY OPTIMIZED
+// Metro Manila Transfer Rates Management - WITH DISCOUNTS
 // ============================================
 
 let allPackages = [];
@@ -11,6 +11,9 @@ let cachedData = null;
 let lastFetchTime = null;
 let isLoading = false;
 let pendingRequest = null;
+let currentDiscountData = null;
+let currentCityDiscountKey = null;
+let currentCityDiscountName = null;
 
 const CACHE_DURATION = 30000; // 30 seconds cache
 const DEBOUNCE_DELAY = 300;
@@ -203,10 +206,15 @@ function renderCities() {
         const cityCard = document.createElement('div');
         cityCard.className = 'city-card';
         cityCard.innerHTML = `
-            <span class="city-name">${escapeHtml(city.name)}</span>
-            <span class="city-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'Active' : 'Inactive'}</span>
+            <div class="city-info">
+                <span class="city-name">${escapeHtml(city.name)}</span>
+                <span class="city-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'Active' : 'Inactive'}</span>
+            </div>
             ${userRole === 'superadmin' ? `
             <div class="city-actions">
+                <button class="btn-icon-sm" onclick="editCityDiscount('${city.key}', '${escapeHtml(city.name)}')" title="Set City Discount">
+                    <i class="fas fa-percent"></i>
+                </button>
                 <button class="btn-icon-sm" onclick="toggleCityStatus('${city.key}', ${isActive})" title="Toggle Status">
                     <i class="fas fa-power-off"></i>
                 </button>
@@ -285,10 +293,6 @@ function renderFareMatrix() {
         headerRow.innerHTML = headerHtml;
     }
     
-    // Use DocumentFragment for batch DOM updates
-    const fragment = document.createDocumentFragment();
-    const tempDiv = document.createElement('tbody');
-    
     let bodyHtml = '';
     displayOrigins.forEach(origin => {
         bodyHtml += '<tr>';
@@ -300,18 +304,62 @@ function renderFareMatrix() {
             } else {
                 const routeKey = `${origin.key}_${dest.key}`;
                 const routePrices = allRates[routeKey] || {};
-                const price = routePrices[currentPackage] || "0";
-                const priceDisplay = price !== "0" ? `₱${parseInt(price).toLocaleString()}` : '₱0';
+                const originalPrice = routePrices[currentPackage] || "0";
+                const originalPriceNum = parseFloat(originalPrice);
+                
+                // Check for city discount
+                let displayHtml = '';
+                let discountBadge = '';
+                let hasDiscount = false;
+                let discountedPriceNum = originalPriceNum;
+                
+                // Get discount for origin or destination city
+                const originCity = allCities.find(c => c.key === origin.key);
+                const destCity = allCities.find(c => c.key === dest.key);
+                
+                let discount = null;
+                let discountSource = null;
+                
+                if (originCity?.discount && originCity.discount.active) {
+                    discount = originCity.discount;
+                    discountSource = 'origin';
+                } else if (destCity?.discount && destCity.discount.active) {
+                    discount = destCity.discount;
+                    discountSource = 'destination';
+                }
+                
+                if (discount && originalPriceNum > 0) {
+                    hasDiscount = true;
+                    if (discount.type === 'percentage') {
+                        const discountAmount = originalPriceNum * (discount.value / 100);
+                        discountedPriceNum = originalPriceNum - discountAmount;
+                        discountBadge = `<span class="discount-indicator" title="${discount.value}% OFF">${discount.value}% OFF</span>`;
+                    } else if (discount.type === 'fixed') {
+                        discountedPriceNum = Math.max(0, originalPriceNum - discount.value);
+                        discountBadge = `<span class="discount-indicator" title="₱${discount.value.toLocaleString()} OFF">₱${discount.value.toLocaleString()} OFF</span>`;
+                    }
+                }
+                
+                if (hasDiscount && discountedPriceNum !== originalPriceNum && originalPriceNum > 0) {
+                    displayHtml = `
+                        <div class="price-container">
+                            <span class="original-price">₱${originalPriceNum.toLocaleString()}</span>
+                            <span class="discounted-price">₱${Math.round(discountedPriceNum).toLocaleString()}</span>
+                        </div>
+                    `;
+                } else {
+                    displayHtml = `<span class="price-display">${originalPriceNum !== 0 ? `₱${originalPriceNum.toLocaleString()}` : '₱0'}</span>`;
+                }
                 
                 bodyHtml += `
-                    <td class="price-cell ${userRole === 'superadmin' ? 'editable' : ''}" 
+                    <td class="price-cell ${userRole === 'superadmin' ? 'editable' : ''} ${hasDiscount ? 'has-discount' : ''}" 
                         data-origin="${origin.key}"
                         data-dest="${dest.key}"
                         data-package="${currentPackage}"
-                        data-price="${price}"
-                        onclick="${userRole === 'superadmin' ? `editRoutePrice('${origin.key}', '${dest.key}', '${currentPackage}', ${price})` : ''}">
-                        <span class="price-display">${priceDisplay}</span>
-                     <\/td>
+                        data-price="${originalPrice}">
+                        ${displayHtml}
+                        ${discountBadge}
+                     </td>
                 `;
             }
         });
@@ -319,6 +367,300 @@ function renderFareMatrix() {
     });
     
     tbody.innerHTML = bodyHtml;
+    
+    // Add click handlers after rendering
+    if (userRole === 'superadmin') {
+        document.querySelectorAll('.price-cell.editable').forEach(cell => {
+            cell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const origin = cell.getAttribute('data-origin');
+                const dest = cell.getAttribute('data-dest');
+                const packageName = cell.getAttribute('data-package');
+                const currentPrice = cell.getAttribute('data-price');
+                makeEditable(cell, origin, dest, packageName, currentPrice);
+            });
+        });
+    }
+}
+
+// ========== Inline Editing Functions ==========
+
+function makeEditable(cell, origin, dest, packageName, currentPrice) {
+    if (activeEditCell === cell) return;
+    if (activeEditCell) {
+        cancelEdit(activeEditCell);
+    }
+    
+    const price = parseInt(currentPrice) || 0;
+    
+    // Create input element
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = price;
+    input.className = 'price-input-inline';
+    input.min = 0;
+    input.step = 1;
+    
+    // Clear cell and add input
+    cell.innerHTML = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+    
+    activeEditCell = cell;
+    
+    // Handle Enter key
+    const handleKeydown = async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            input.removeEventListener('keydown', handleKeydown);
+            input.removeEventListener('blur', handleBlur);
+            await savePriceEdit(cell, input.value, origin, dest, packageName);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            input.removeEventListener('keydown', handleKeydown);
+            input.removeEventListener('blur', handleBlur);
+            cancelEdit(cell);
+        }
+    };
+    
+    // Handle blur
+    const handleBlur = () => {
+        if (!isSaving && activeEditCell === cell) {
+            input.removeEventListener('keydown', handleKeydown);
+            input.removeEventListener('blur', handleBlur);
+            cancelEdit(cell);
+        }
+    };
+    
+    input.addEventListener('keydown', handleKeydown);
+    input.addEventListener('blur', handleBlur);
+}
+
+let activeEditCell = null;
+let isSaving = false;
+
+function cancelEdit(cell) {
+    if (activeEditCell !== cell) return;
+    
+    const currentPrice = cell.getAttribute('data-price') || 0;
+    const priceNum = parseFloat(currentPrice);
+    const priceDisplay = priceNum !== 0 ? `₱${priceNum.toLocaleString()}` : '₱0';
+    
+    cell.innerHTML = `<span class="price-display">${priceDisplay}</span>`;
+    activeEditCell = null;
+}
+
+async function savePriceEdit(cell, newValue, origin, dest, packageName) {
+    if (isSaving) return;
+    isSaving = true;
+    
+    const price = parseInt(newValue);
+    
+    if (isNaN(price) || price < 0) {
+        toastError('Please enter a valid price (0 or greater)', 'Invalid Input');
+        cancelEdit(cell);
+        isSaving = false;
+        return;
+    }
+    
+    // Show loading state
+    cell.innerHTML = '<div class="price-loading"><i class="fas fa-spinner fa-spin"></i></div>';
+    activeEditCell = null;
+    
+    try {
+        // Update forward route
+        const getForwardResponse = await fetch(`/api/common/metro-manila-transfer/rates/${origin}/${dest}`, {
+            credentials: 'include'
+        });
+        const forwardRouteData = await getForwardResponse.json();
+        const forwardPrices = forwardRouteData.prices || {};
+        forwardPrices[packageName] = price.toString();
+        
+        await fetch(`/api/common/metro-manila-transfer/rates/${origin}/${dest}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prices: forwardPrices })
+        });
+        
+        // Update reverse route
+        const getReverseResponse = await fetch(`/api/common/metro-manila-transfer/rates/${dest}/${origin}`, {
+            credentials: 'include'
+        });
+        const reverseRouteData = await getReverseResponse.json();
+        const reversePrices = reverseRouteData.prices || {};
+        reversePrices[packageName] = price.toString();
+        
+        await fetch(`/api/common/metro-manila-transfer/rates/${dest}/${origin}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prices: reversePrices })
+        });
+        
+        // Update UI
+        const priceDisplay = price !== 0 ? `₱${price.toLocaleString()}` : '₱0';
+        cell.innerHTML = `<span class="price-display">${priceDisplay}</span>`;
+        cell.setAttribute('data-price', price);
+        
+        // Update reverse cell
+        const reverseCell = document.querySelector(`.price-cell[data-origin="${dest}"][data-dest="${origin}"][data-package="${packageName}"]`);
+        if (reverseCell) {
+            reverseCell.innerHTML = `<span class="price-display">${priceDisplay}</span>`;
+            reverseCell.setAttribute('data-price', price);
+        }
+        
+        toastSuccess(`Updated price for ${packageName} (both directions)`, 'Success');
+        
+        // Update cache
+        if (cachedData && cachedData.rates) {
+            const forwardKey = `${origin}_${dest}`;
+            const reverseKey = `${dest}_${origin}`;
+            if (!cachedData.rates[forwardKey]) cachedData.rates[forwardKey] = {};
+            if (!cachedData.rates[reverseKey]) cachedData.rates[reverseKey] = {};
+            cachedData.rates[forwardKey][packageName] = price.toString();
+            cachedData.rates[reverseKey][packageName] = price.toString();
+        }
+        
+        // Refresh matrix to show updated discounts
+        renderFareMatrix();
+        
+    } catch (error) {
+        console.error('Error saving price:', error);
+        toastError('An unexpected error occurred', 'Error');
+        cancelEdit(cell);
+    } finally {
+        isSaving = false;
+    }
+}
+
+// ========== City Discount Functions ==========
+
+async function editCityDiscount(cityKey, cityName) {
+    currentCityDiscountKey = cityKey;
+    currentCityDiscountName = cityName;
+    
+    const modal = document.getElementById('cityDiscountModal');
+    if (!modal) return;
+    
+    document.getElementById('cityDiscountModalTitle').textContent = `Set Discount for City: ${cityName}`;
+    document.getElementById('cityDiscountKey').value = cityKey;
+    
+    // Check if city already has a discount
+    try {
+        const response = await fetch(`/api/common/metro-manila-transfer/cities/${cityKey}/discount`);
+        const data = await response.json();
+        
+        if (data.hasDiscount) {
+            document.getElementById('cityDiscountType').value = data.discount.type || 'percentage';
+            document.getElementById('cityDiscountValue').value = data.discount.value || '';
+            document.getElementById('cityDiscountDescription').value = data.discount.description || '';
+            document.getElementById('cityDiscountValidUntil').value = data.discount.validUntil || '';
+        } else {
+            document.getElementById('cityDiscountForm').reset();
+            document.getElementById('cityDiscountType').value = 'percentage';
+        }
+    } catch (error) {
+        document.getElementById('cityDiscountForm').reset();
+        document.getElementById('cityDiscountType').value = 'percentage';
+    }
+    
+    modal.style.display = 'flex';
+}
+
+function closeCityDiscountModal() {
+    const modal = document.getElementById('cityDiscountModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    currentCityDiscountKey = null;
+    currentCityDiscountName = null;
+}
+
+async function saveCityDiscount(e) {
+    e.preventDefault();
+    
+    const cityKey = document.getElementById('cityDiscountKey').value;
+    const discountType = document.getElementById('cityDiscountType').value;
+    const discountValue = document.getElementById('cityDiscountValue').value;
+    const description = document.getElementById('cityDiscountDescription').value;
+    const validUntil = document.getElementById('cityDiscountValidUntil').value;
+    
+    if (!discountValue) {
+        toastError('Discount value is required', 'Validation Error');
+        return;
+    }
+    
+    const valueNum = parseFloat(discountValue);
+    if (discountType === 'percentage' && (valueNum < 0 || valueNum > 100)) {
+        toastError('Percentage must be between 0 and 100', 'Validation Error');
+        return;
+    }
+    
+    if (discountType === 'fixed' && valueNum < 0) {
+        toastError('Fixed discount cannot be negative', 'Validation Error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/common/metro-manila-transfer/cities/${cityKey}/discount`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: discountType,
+                value: discountValue,
+                description,
+                validUntil
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            toastSuccess(`Discount applied to all routes ${discountType === 'percentage' ? `(${discountValue}% OFF)` : `(₱${parseFloat(discountValue).toLocaleString()} OFF)`} for ${currentCityDiscountName}!`, 'Success');
+            closeCityDiscountModal();
+            cachedData = null;
+            loadData(true);
+        } else {
+            toastError(data.error || 'Failed to apply discount', 'Error');
+        }
+    } catch (error) {
+        console.error('Error saving city discount:', error);
+        toastError('An unexpected error occurred', 'Error');
+    }
+}
+
+async function removeCityDiscount() {
+    if (!currentCityDiscountKey) return;
+    
+    showConfirmModal({
+        title: 'Remove City Discount',
+        message: `Are you sure you want to remove the discount for city "${currentCityDiscountName}"? This will remove discounts from all routes involving this city.`,
+        confirmText: 'Remove',
+        confirmIcon: 'fa-trash',
+        cancelText: 'Cancel',
+        type: 'danger',
+        onConfirm: async () => {
+            try {
+                const response = await fetch(`/api/common/metro-manila-transfer/cities/${currentCityDiscountKey}/discount`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    toastSuccess('City discount removed successfully', 'Success');
+                    closeCityDiscountModal();
+                    cachedData = null;
+                    loadData(true);
+                } else {
+                    toastError(data.error || 'Failed to remove city discount', 'Error');
+                }
+            } catch (error) {
+                console.error('Error removing city discount:', error);
+                toastError('An unexpected error occurred', 'Error');
+            }
+        }
+    });
 }
 
 // ========== Event Listeners ==========
@@ -327,7 +669,7 @@ function setupEventListeners() {
     // Add City button
     document.getElementById('addCityBtn')?.addEventListener('click', () => openCityModal());
     
-    // Origin filter with debounce (though change doesn't need debounce)
+    // Origin filter
     const originFilter = document.getElementById('originFilter');
     if (originFilter) {
         originFilter.addEventListener('change', function() {
@@ -354,10 +696,16 @@ function setupEventListeners() {
     document.getElementById('cancelPricesBtn')?.addEventListener('click', closePricesModal);
     document.getElementById('pricesForm')?.addEventListener('submit', saveRoutePrice);
     
+    // City Discount Modal
+    document.getElementById('closeCityDiscountModal')?.addEventListener('click', closeCityDiscountModal);
+    document.getElementById('cancelCityDiscountBtn')?.addEventListener('click', closeCityDiscountModal);
+    document.getElementById('cityDiscountForm')?.addEventListener('submit', saveCityDiscount);
+    
     // Close modals on outside click
     window.addEventListener('click', (e) => {
         if (e.target === document.getElementById('cityModal')) closeCityModal();
         if (e.target === document.getElementById('pricesModal')) closePricesModal();
+        if (e.target === document.getElementById('cityDiscountModal')) closeCityDiscountModal();
     });
 }
 
@@ -382,7 +730,6 @@ async function saveCity(e) {
         return;
     }
     
-    // Disable submit button
     const submitBtn = e.target.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
@@ -464,118 +811,7 @@ async function toggleCityStatus(cityKey, currentStatus) {
     }
 }
 
-// ========== Route Price Functions ==========
-
-async function editRoutePrice(originKey, destKey, packageName, currentPrice) {
-    const cell = event.currentTarget;
-    const originalContent = cell.innerHTML;
-    
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.value = currentPrice;
-    input.className = 'price-input-inline';
-    input.min = 0;
-    input.step = 1;
-    
-    cell.innerHTML = '';
-    cell.appendChild(input);
-    input.focus();
-    input.select();
-    
-    const savePrice = async () => {
-        const newPrice = parseInt(input.value);
-        
-        if (isNaN(newPrice) || newPrice < 0) {
-            toastError('Please enter a valid price (0 or greater)', 'Invalid Input');
-            cell.innerHTML = originalContent;
-            return;
-        }
-        
-        cell.innerHTML = '<div class="price-loading"><i class="fas fa-spinner fa-spin"></i></div>';
-        
-        try {
-            // Update forward route
-            const getForwardResponse = await fetch(`/api/common/metro-manila-transfer/rates/${originKey}/${destKey}`, {
-                credentials: 'include'
-            });
-            const forwardRouteData = await getForwardResponse.json();
-            const forwardPrices = forwardRouteData.prices || {};
-            forwardPrices[packageName] = newPrice.toString();
-            
-            await fetch(`/api/common/metro-manila-transfer/rates/${originKey}/${destKey}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prices: forwardPrices })
-            });
-            
-            // Update reverse route
-            const getReverseResponse = await fetch(`/api/common/metro-manila-transfer/rates/${destKey}/${originKey}`, {
-                credentials: 'include'
-            });
-            const reverseRouteData = await getReverseResponse.json();
-            const reversePrices = reverseRouteData.prices || {};
-            reversePrices[packageName] = newPrice.toString();
-            
-            await fetch(`/api/common/metro-manila-transfer/rates/${destKey}/${originKey}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prices: reversePrices })
-            });
-            
-            // Update UI
-            const priceDisplay = newPrice !== 0 ? `₱${newPrice.toLocaleString()}` : '₱0';
-            cell.innerHTML = `<span class="price-display">${priceDisplay}</span>`;
-            cell.setAttribute('data-price', newPrice);
-            
-            // Update reverse cell
-            const reverseCell = document.querySelector(`.price-cell[data-origin="${destKey}"][data-dest="${originKey}"][data-package="${packageName}"]`);
-            if (reverseCell) {
-                reverseCell.innerHTML = `<span class="price-display">${priceDisplay}</span>`;
-                reverseCell.setAttribute('data-price', newPrice);
-            }
-            
-            toastSuccess(`Updated price for ${packageName} (both directions)`, 'Success');
-            
-            // Update cache
-            if (cachedData && cachedData.rates) {
-                const forwardKey = `${originKey}_${destKey}`;
-                const reverseKey = `${destKey}_${originKey}`;
-                if (!cachedData.rates[forwardKey]) cachedData.rates[forwardKey] = {};
-                if (!cachedData.rates[reverseKey]) cachedData.rates[reverseKey] = {};
-                cachedData.rates[forwardKey][packageName] = newPrice.toString();
-                cachedData.rates[reverseKey][packageName] = newPrice.toString();
-            }
-            
-        } catch (error) {
-            console.error('Error saving price:', error);
-            toastError('An unexpected error occurred', 'Error');
-            cell.innerHTML = originalContent;
-        }
-    };
-    
-    const handleKeydown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            input.removeEventListener('keydown', handleKeydown);
-            input.removeEventListener('blur', handleBlur);
-            savePrice();
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            input.removeEventListener('keydown', handleKeydown);
-            input.removeEventListener('blur', handleBlur);
-            cell.innerHTML = originalContent;
-        }
-    };
-    
-    const handleBlur = () => {
-        input.removeEventListener('keydown', handleKeydown);
-        input.removeEventListener('blur', handleBlur);
-        savePrice();
-    };
-    
-    input.addEventListener('keydown', handleKeydown);
-    input.addEventListener('blur', handleBlur);
-}
+// ========== Route Price Functions (Legacy) ==========
 
 function closePricesModal() {
     document.getElementById('pricesModal').style.display = 'none';
