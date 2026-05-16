@@ -41,6 +41,34 @@ def get_route_key(origin, destination):
     """Generate a unique route key"""
     return f"{origin}_{destination}"
 
+def calculate_discounted_prices(prices, discount_type, discount_value):
+    """Calculate discounted prices based on discount type and value"""
+    discounted_prices = {}
+    
+    for package_name, price_str in prices.items():
+        try:
+            original_price = float(price_str)
+            
+            if discount_type == 'percentage':
+                discount_amount = original_price * (float(discount_value) / 100)
+                discounted_price = original_price - discount_amount
+            elif discount_type == 'fixed':
+                discounted_price = original_price - float(discount_value)
+            else:
+                discounted_price = original_price
+            
+            # Ensure price doesn't go below 0
+            discounted_price = max(0, discounted_price)
+            
+            # Store as string to maintain consistency
+            discounted_prices[package_name] = str(round(discounted_price, 2))
+            
+        except (ValueError, TypeError):
+            # If price is invalid, keep as is
+            discounted_prices[package_name] = price_str
+    
+    return discounted_prices
+
 # ========== CITY MANAGEMENT ==========
 
 @metro_manila_transfer_api_bp.route('/cities', methods=['GET'])
@@ -58,11 +86,17 @@ def get_cities():
         
         cities_list = []
         for city_key, city_data in all_cities.items():
-            cities_list.append({
+            city_info = {
                 'key': city_key,
                 'name': city_data.get('name', city_key),
                 'isActive': city_data.get('isActive', True)
-            })
+            }
+            
+            # Include discount info if exists
+            if 'discount' in city_data:
+                city_info['discount'] = city_data['discount']
+            
+            cities_list.append(city_info)
         
         return jsonify({'cities': cities_list})
     except Exception as e:
@@ -171,6 +205,142 @@ def toggle_city(city_key):
         print(f"ERROR: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# ========== CITY DISCOUNT MANAGEMENT ==========
+
+@metro_manila_transfer_api_bp.route('/cities/<city_key>/discount', methods=['GET'])
+@login_required_api
+@role_required_api(['superadmin', 'admin'])
+@no_rate_limit
+def get_city_discount(city_key):
+    """Get discount for a specific city"""
+    try:
+        cities_ref = db.reference('rates/metroManilaTransfer/cities')
+        current_data = cities_ref.get() or {}
+        
+        if city_key not in current_data:
+            return jsonify({'error': 'City not found'}), 404
+        
+        city_discount = current_data[city_key].get('discount', None)
+        
+        if city_discount:
+            # Check if discount is still valid
+            is_valid = True
+            if city_discount.get('validUntil'):
+                try:
+                    valid_date = datetime.fromisoformat(city_discount['validUntil'])
+                    if datetime.now() > valid_date:
+                        is_valid = False
+                except:
+                    pass
+            
+            return jsonify({
+                'hasDiscount': is_valid,
+                'discount': city_discount if is_valid else None
+            })
+        else:
+            return jsonify({'hasDiscount': False})
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@metro_manila_transfer_api_bp.route('/cities/<city_key>/discount', methods=['POST'])
+@login_required_api
+@role_required_api(['superadmin'])
+@no_rate_limit
+def set_city_discount(city_key):
+    """Set discount for all routes involving a city"""
+    try:
+        data = request.json
+        discount_type = data.get('type')  # 'percentage' or 'fixed'
+        discount_value = data.get('value')
+        description = data.get('description', '')
+        valid_until = data.get('validUntil', '')
+        
+        if not discount_type or discount_type not in ['percentage', 'fixed']:
+            return jsonify({'error': 'Invalid discount type. Must be "percentage" or "fixed"'}), 400
+        
+        if not discount_value:
+            return jsonify({'error': 'Discount value is required'}), 400
+        
+        # Validate discount value
+        try:
+            discount_float = float(discount_value)
+            if discount_type == 'percentage' and (discount_float < 0 or discount_float > 100):
+                return jsonify({'error': 'Percentage must be between 0 and 100'}), 400
+            if discount_type == 'fixed' and discount_float < 0:
+                return jsonify({'error': 'Fixed discount cannot be negative'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid discount value'}), 400
+        
+        cities_ref = db.reference('rates/metroManilaTransfer/cities')
+        current_data = cities_ref.get() or {}
+        
+        if city_key not in current_data:
+            return jsonify({'error': 'City not found'}), 404
+        
+        # Prepare discount data
+        discount_data = {
+            'type': discount_type,
+            'value': str(discount_value),
+            'active': True,
+            'createdAt': datetime.now().isoformat(),
+            'createdBy': session.get('user_id', 'unknown')
+        }
+        
+        if description:
+            discount_data['description'] = description
+        
+        if valid_until:
+            discount_data['validUntil'] = valid_until
+        
+        # Store discount at city level
+        current_data[city_key]['discount'] = discount_data
+        cities_ref.set(current_data)
+        
+        log_activity(f"Set discount for city '{city_key}' - {discount_type}: {discount_value}", 
+                    session.get('user_id'), session.get('display_name'))
+        
+        return jsonify({
+            'message': f'Discount applied to all routes involving {current_data[city_key]["name"]}',
+            'discount': discount_data
+        }), 200
+        
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@metro_manila_transfer_api_bp.route('/cities/<city_key>/discount', methods=['DELETE'])
+@login_required_api
+@role_required_api(['superadmin'])
+@no_rate_limit
+def remove_city_discount(city_key):
+    """Remove discount from a city"""
+    try:
+        cities_ref = db.reference('rates/metroManilaTransfer/cities')
+        current_data = cities_ref.get() or {}
+        
+        if city_key not in current_data:
+            return jsonify({'error': 'City not found'}), 404
+        
+        city_name = current_data[city_key].get('name', city_key)
+        
+        # Remove discount if exists
+        if 'discount' in current_data[city_key]:
+            del current_data[city_key]['discount']
+            cities_ref.set(current_data)
+            
+            log_activity(f"Removed discount from city '{city_key}'", 
+                        session.get('user_id'), session.get('display_name'))
+            
+            return jsonify({'message': f'Discount removed from {city_name}'}), 200
+        else:
+            return jsonify({'message': 'No discount found for this city'}), 200
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 # ========== RATE MANAGEMENT ==========
 
 @metro_manila_transfer_api_bp.route('/rates', methods=['GET'])
@@ -241,7 +411,7 @@ def update_rate(origin, destination):
 @role_required_api(['superadmin', 'admin'])
 @no_rate_limit
 def get_matrix():
-    """Get complete fare matrix for display"""
+    """Get complete fare matrix for display including city discounts"""
     try:
         # Get all packages
         packages_ref = db.reference('packages')
@@ -263,17 +433,36 @@ def get_matrix():
         
         packages_list.sort(key=get_package_order)
         
-        # Get all cities
+        # Get all cities with their discounts
         cities_ref = db.reference('rates/metroManilaTransfer/cities')
         all_cities = cities_ref.get() or {}
         
         active_cities = []
         for city_key, city_data in all_cities.items():
-            if city_data.get('isActive', True):
-                active_cities.append({
-                    'key': city_key,
-                    'name': city_data.get('name', city_key)
-                })
+            city_info = {
+                'key': city_key,
+                'name': city_data.get('name', city_key),
+                'isActive': city_data.get('isActive', True)
+            }
+            
+            # Include discount info if exists and valid
+            if 'discount' in city_data:
+                discount = city_data['discount']
+                # Check if discount is still valid
+                is_valid = True
+                if discount.get('validUntil'):
+                    try:
+                        valid_date = datetime.fromisoformat(discount['validUntil'])
+                        if datetime.now() > valid_date:
+                            is_valid = False
+                    except:
+                        pass
+                
+                if is_valid:
+                    city_info['discount'] = discount
+            
+            if city_info.get('isActive', True):
+                active_cities.append(city_info)
         
         # Get all rates
         rates_ref = db.reference('rates/metroManilaTransfer/rates')
