@@ -1,4 +1,4 @@
-// car-rental-with-driver.js - With Driver specific logic
+// car-rental-with-driver.js - With Driver specific logic with CSRF support
 (function() {
     'use strict';
     
@@ -19,6 +19,45 @@
     
     const API_BASE_URL = '/api/common/car-rental/with-driver';
     
+    // Helper function to get CSRF token from cookie
+    function getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'XSRF-TOKEN') {
+                return decodeURIComponent(value);
+            }
+        }
+        return null;
+    }
+    
+    // Helper function for API requests with CSRF token
+    async function apiRequest(url, options = {}) {
+        const method = options.method || 'GET';
+        const csrfToken = getCsrfToken();
+        
+        const defaultHeaders = {
+            'Content-Type': 'application/json',
+        };
+        
+        // Add CSRF token for non-GET requests
+        if (method !== 'GET' && csrfToken) {
+            defaultHeaders['X-CSRFToken'] = csrfToken;
+        }
+        
+        const config = {
+            ...options,
+            method,
+            headers: {
+                ...defaultHeaders,
+                ...options.headers
+            },
+            credentials: 'include'  // Important for cookies
+        };
+        
+        return fetch(url, config);
+    }
+    
     function showNotification(message, type = 'success') {
         if (typeof window.showNotificationGlobal === 'function') {
             window.showNotificationGlobal(message, type);
@@ -36,7 +75,7 @@
     
     async function getSessionRole() {
         try {
-            const response = await fetch('/api/v1/auth/session/check');
+            const response = await apiRequest('/api/v1/auth/session/check');
             const data = await response.json();
             return data.authenticated && data.user ? data.user.role : null;
         } catch (error) {
@@ -160,7 +199,7 @@
     
     async function loadDestinationsList() {
         try {
-            const response = await fetch(`${API_BASE_URL}/provincial/destinations`);
+            const response = await apiRequest(`${API_BASE_URL}/provincial/destinations`);
             if (!response.ok) throw new Error('Failed to load destinations');
             const data = await response.json();
             displayDestinationsList(data.destinations || []);
@@ -220,9 +259,8 @@
         }
         
         try {
-            const response = await fetch(`${API_BASE_URL}/provincial/destinations`, {
+            const response = await apiRequest(`${API_BASE_URL}/provincial/destinations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: name })
             });
             
@@ -246,7 +284,7 @@
         if (!confirmed) return;
         
         try {
-            const response = await fetch(`${API_BASE_URL}/provincial/destinations/${destinationKey}`, {
+            const response = await apiRequest(`${API_BASE_URL}/provincial/destinations/${destinationKey}`, {
                 method: 'DELETE'
             });
             
@@ -264,7 +302,7 @@
     
     async function loadProvincialDestinations() {
         try {
-            const response = await fetch(`${API_BASE_URL}/provincial/destinations`);
+            const response = await apiRequest(`${API_BASE_URL}/provincial/destinations`);
             if (!response.ok) throw new Error('Failed to load destinations');
             const data = await response.json();
             // Store ALL destinations for management, but only ACTIVE ones for the matrix
@@ -281,7 +319,7 @@
     
     async function loadWithDriverDurations() {
         try {
-            const response = await fetch(`${API_BASE_URL}/durations`);
+            const response = await apiRequest(`${API_BASE_URL}/durations`);
             if (!response.ok) throw new Error('Failed to load durations');
             const data = await response.json();
             withDriverData.durations = data.durations || [];
@@ -404,7 +442,7 @@
                         <span class="base-price">₱${formatNumber(rate)}</span>
                         <span class="price-breakdown">(${duration.hours}hrs)</span>
                     </div>
-                </td>`;
+                 </td>`;
             }
             
             rowsHtml += '</tr>';
@@ -464,7 +502,7 @@
         const thead = document.getElementById('provincialTableHeaderWD');
         
         if (!withDriverData.vehicleTypes || withDriverData.vehicleTypes.length === 0) {
-            tbody.innerHTML = '<td><td colspan="100%" class="text-center">No vehicle types available</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No vehicle types available</td></tr>';
             return;
         }
         
@@ -504,7 +542,7 @@
                     <div class="price-info">
                         <span class="base-price">₱${formatNumber(rate)}</span>
                     </div>
-                </td>`;
+                 </td>`;
             }
             
             rowsHtml += '</tr>';
@@ -580,9 +618,8 @@
             const newRate = parseInt(input.value) || 0;
             
             try {
-                const response = await fetch(`${API_BASE_URL}/metro-manila/rates`, {
+                const response = await apiRequest(`${API_BASE_URL}/metro-manila/rates`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         vehicleType: vehicleType,
                         rateType: currentRateType,
@@ -663,9 +700,8 @@
             const newRate = parseInt(input.value) || 0;
             
             try {
-                const response = await fetch(`${API_BASE_URL}/provincial/rates`, {
+                const response = await apiRequest(`${API_BASE_URL}/provincial/rates`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         vehicleType: vehicleType,
                         packageType: currentPackageType,
@@ -732,7 +768,7 @@
 
     async function loadRateData() {
         try {
-            const response = await fetch(`${API_BASE_URL}/rates/all`);
+            const response = await apiRequest(`${API_BASE_URL}/rates/all`);
             if (!response.ok) throw new Error('Failed to load rate data');
             const data = await response.json();
             withDriverData.metroManilaRates = data.metroManila || {};
@@ -807,9 +843,8 @@
         }
         
         try {
-            const response = await fetch(`${API_BASE_URL}/durations`, {
+            const response = await apiRequest(`${API_BASE_URL}/durations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, hours })
             });
             if (!response.ok) {
@@ -828,7 +863,9 @@
     
     async function toggleWithDriverDuration(durationKey) {
         try {
-            const response = await fetch(`${API_BASE_URL}/durations/${durationKey}/toggle`, { method: 'PATCH' });
+            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}/toggle`, { 
+                method: 'PATCH'
+            });
             if (!response.ok) throw new Error('Failed to toggle duration');
             const data = await response.json();
             showNotification(data.message);
@@ -843,7 +880,9 @@
         if (!confirmed) return;
         
         try {
-            const response = await fetch(`${API_BASE_URL}/durations/${durationKey}`, { method: 'DELETE' });
+            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}`, { 
+                method: 'DELETE'
+            });
             if (!response.ok) throw new Error('Failed to delete duration');
             showNotification('Duration deleted successfully');
             await loadWithDriverDurations();
@@ -863,26 +902,10 @@
         }
     }
 
-    async function toggleWithDriverDuration(durationKey) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/durations/${durationKey}/toggle`, { 
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (!response.ok) throw new Error('Failed to toggle duration');
-            const data = await response.json();
-            showNotification(data.message);
-            await loadWithDriverDurations();
-        } catch (error) {
-            showNotification('Failed to toggle duration', 'error');
-        }
-    }
-
     async function toggleProvincialDestination(destinationKey) {
         try {
-            const response = await fetch(`${API_BASE_URL}/provincial/destinations/${destinationKey}/toggle`, { 
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' }
+            const response = await apiRequest(`${API_BASE_URL}/provincial/destinations/${destinationKey}/toggle`, { 
+                method: 'PATCH'
             });
             if (!response.ok) throw new Error('Failed to toggle destination');
             const data = await response.json();

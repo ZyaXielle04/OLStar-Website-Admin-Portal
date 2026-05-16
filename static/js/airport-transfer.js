@@ -1,5 +1,5 @@
 // ============================================
-// Airport Transfer Rates Management
+// Airport Transfer Rates Management WITH CSRF SUPPORT
 // ============================================
 
 let allPackages = [];
@@ -13,6 +13,48 @@ let currentCategoryDiscountName = null;
 
 const userRole = document.querySelector('.user-role')?.innerText?.toLowerCase() || 'admin';
 
+// Helper function to get CSRF token from cookie
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'XSRF-TOKEN') {
+            return decodeURIComponent(value);
+        }
+    }
+    return null;
+}
+
+// Helper function for API requests with CSRF token
+async function apiRequest(url, options = {}) {
+    const method = options.method || 'GET';
+    const csrfToken = getCsrfToken();
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    // Add CSRF token for non-GET requests
+    if (method !== 'GET' && csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    const config = {
+        ...options,
+        method,
+        headers,
+        credentials: 'include'  // Important for cookies
+    };
+    
+    // Don't set body for GET requests
+    if (method === 'GET' && config.body) {
+        delete config.body;
+    }
+    
+    return fetch(url, config);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     loadPackages();
     loadCategories();
@@ -22,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadPackages() {
     try {
-        const response = await fetch('/api/common/airport-transfer/packages');
+        const response = await apiRequest('/api/common/airport-transfer/packages');
         const data = await response.json();
         let packages = data.packages || [];
         
@@ -63,7 +105,7 @@ async function loadPackages() {
 
 async function loadCategories() {
     try {
-        const response = await fetch('/api/common/airport-transfer/categories');
+        const response = await apiRequest('/api/common/airport-transfer/categories');
         const data = await response.json();
         allCategories = data.categories || [];
         renderCategories();
@@ -163,7 +205,7 @@ function updateCategoryFilter() {
 
 async function renderFareMatrix() {
     try {
-        const response = await fetch('/api/common/airport-transfer/matrix');
+        const response = await apiRequest('/api/common/airport-transfer/matrix');
         const data = await response.json();
         
         let packages = data.packages || [];
@@ -243,7 +285,7 @@ async function renderFareMatrix() {
                     <strong>${escapeHtml(areaDisplayName)}</strong>
                     <br><small>${escapeHtml(category.name)}</small>
                     ${hasDiscount ? `<span class="discount-badge"><i class="fas fa-tag"></i> ${discountBadgeText ? `(${discountBadgeText})` : ''}</span>` : ''}
-                 </td>`;
+                  </td>`;
                 
                 packages.forEach(pkg => {
                     let originalPrice = prices[pkg.name] || "0";
@@ -292,7 +334,7 @@ async function renderFareMatrix() {
                             data-price="${dataPrice}">
                             ${displayHtml}
                             ${discountBadge}
-                         </td>
+                          </td>
                     `;
                 });
                 bodyHtml += '</tr>';
@@ -324,7 +366,7 @@ async function renderFareMatrix() {
 
 async function loadDiscountSettings() {
     try {
-        const response = await fetch('/api/common/airport-transfer/global-discount');
+        const response = await apiRequest('/api/common/airport-transfer/global-discount');
         const data = await response.json();
         
         if (data.hasDiscount) {
@@ -468,9 +510,8 @@ async function saveGlobalDiscount(e) {
     }
     
     try {
-        const response = await fetch('/api/common/airport-transfer/global-discount', {
+        const response = await apiRequest('/api/common/airport-transfer/global-discount', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 discountType,
                 value: discountValue,
@@ -507,7 +548,7 @@ async function removeGlobalDiscount() {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch('/api/common/airport-transfer/global-discount?removeFromAreas=true', {
+                const response = await apiRequest('/api/common/airport-transfer/global-discount?removeFromAreas=true', {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -539,11 +580,10 @@ async function editCategoryDiscount(categoryKey, categoryName) {
     
     document.getElementById('categoryDiscountModalTitle').textContent = `Set Discount for Category: ${categoryName}`;
     document.getElementById('categoryDiscountKey').value = categoryKey;
-    // Remove this line: document.getElementById('categoryDiscountName').value = categoryName;
     
     // Check if category already has a discount
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/discount`);
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/discount`);
         const data = await response.json();
         
         if (data.hasDiscount) {
@@ -608,9 +648,8 @@ async function saveCategoryDiscount(e) {
     }
     
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/discount`, {
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/discount`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 discountType,
                 value: discountValue,
@@ -648,7 +687,7 @@ async function removeCategoryDiscount() {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/airport-transfer/categories/${currentCategoryDiscountKey}/discount`, {
+                const response = await apiRequest(`/api/common/airport-transfer/categories/${currentCategoryDiscountKey}/discount`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -673,7 +712,7 @@ async function removeCategoryDiscount() {
 
 async function editAreaDiscount(categoryKey, areaKey, areaName) {
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`);
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`);
         const data = await response.json();
         const discountData = data.discountedPrices || {};
         
@@ -735,9 +774,8 @@ async function saveAreaDiscount(e) {
     }
     
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`, {
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 discountType,
                 value: discountValue,
@@ -772,7 +810,7 @@ async function removeAreaDiscount(categoryKey, areaKey, areaName) {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`, {
+                const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/discounted-prices`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -882,9 +920,7 @@ async function savePriceEdit(cell, newValue, categoryKey, areaKey, packageName) 
     
     try {
         // Get current prices for this area
-        const getResponse = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`, {
-            credentials: 'include'
-        });
+        const getResponse = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`);
         const currentData = await getResponse.json();
         const currentPrices = currentData.prices || {};
         
@@ -892,10 +928,8 @@ async function savePriceEdit(cell, newValue, categoryKey, areaKey, packageName) 
         currentPrices[packageName] = price.toString();
         
         // Save all prices back
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`, {
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ prices: currentPrices })
         });
         
@@ -1002,9 +1036,8 @@ async function saveCategory(e) {
     }
     
     try {
-        const response = await fetch('/api/common/airport-transfer/categories', {
+        const response = await apiRequest('/api/common/airport-transfer/categories', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 name: categoryName,
                 area: initialAreaName
@@ -1036,7 +1069,7 @@ async function deleteCategory(categoryKey) {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}`, {
+                const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -1057,7 +1090,7 @@ async function deleteCategory(categoryKey) {
 
 async function toggleCategoryStatus(categoryKey, currentStatus) {
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/toggle`, {
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/toggle`, {
             method: 'PATCH'
         });
         const data = await response.json();
@@ -1100,9 +1133,8 @@ async function saveArea(e) {
     }
     
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas`, {
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name })
         });
         
@@ -1132,7 +1164,7 @@ async function deleteArea(categoryKey, areaKey) {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}`, {
+                const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -1156,7 +1188,7 @@ async function deleteArea(categoryKey, areaKey) {
 
 async function editAreaPrices(categoryKey, areaKey) {
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`);
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`);
         const data = await response.json();
         const currentPrices = data.prices || {};
         
@@ -1241,9 +1273,8 @@ async function savePrices(e) {
     });
     
     try {
-        const response = await fetch(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`, {
+        const response = await apiRequest(`/api/common/airport-transfer/categories/${categoryKey}/areas/${areaKey}/prices`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prices })
         });
         

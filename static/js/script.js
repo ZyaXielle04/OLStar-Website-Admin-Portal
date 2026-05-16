@@ -1,4 +1,4 @@
-// Management Portal | Production-Ready Authentication
+// Management Portal | Production-Ready Authentication with CSRF Support
 (function() {
   'use strict';
 
@@ -13,10 +13,16 @@
   const forgotLink = document.getElementById('forgotPasswordLink');
   const passwordToggle = document.getElementById('passwordToggle');
   
-  // Get CSRF token from meta tag
-  const getCSRFToken = () => {
-    const token = document.querySelector('meta[name="csrf-token"]');
-    return token ? token.getAttribute('content') : '';
+  // Get CSRF token from cookie (consistent with other modules)
+  const getCsrfToken = () => {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'XSRF-TOKEN') {
+        return decodeURIComponent(value);
+      }
+    }
+    return null;
   };
 
   let isSubmitting = false;
@@ -199,17 +205,24 @@
     setTimeout(() => { if(card) card.style.transform = ''; }, 150);
   };
 
-  // API Call
+  // API Call with CSRF token from cookie
   const authenticateUser = async (email, password) => {
     const apiUrl = '/api/v1/auth/login';
+    const csrfToken = getCsrfToken();
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    
+    // Add CSRF token if available
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
     
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'X-CSRFToken': getCSRFToken()
-      },
+      headers: headers,
       body: JSON.stringify({ email, password }),
       credentials: 'include'
     });

@@ -666,3 +666,361 @@
         padding: 1.5rem;
     }
 }
+
+/* ============================================
+   Additional Styles for Metro Manila Transfer
+   with Discount Functionality
+   ============================================ */
+
+/* Price Container for Discounted Prices */
+.price-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.original-price {
+    font-size: 0.7rem;
+    color: #6B7280;
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+
+.discounted-price {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #10B981;
+}
+
+/* Discount Indicator Badge */
+.discount-indicator {
+    display: inline-block;
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    font-size: 0.6rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Price Cell with Discount */
+.price-cell.has-discount {
+    background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+}
+
+.price-cell.has-discount:hover {
+    background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+}
+
+/* City Card with Discount */
+.city-card {
+    background: var(--light-gray);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 160px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.city-card.has-discount {
+    background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+    border-color: #10B981;
+}
+
+.city-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.city-discount-badge {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    font-size: 0.6rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* City Discount Button */
+.btn-city-discount {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+    color: #10B981;
+}
+
+.btn-city-discount:hover {
+    background: #D1FAE5;
+}
+
+/* City Actions - Updated */
+.city-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Discount Info Display */
+.discount-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+}
+
+.discount-info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.discount-info-item:last-child {
+    border-bottom: none;
+}
+
+.discount-label {
+    font-weight: 600;
+    color: var(--gray);
+    font-size: 0.85rem;
+}
+
+.discount-value {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.discount-value.percentage {
+    color: #10B981;
+}
+
+.discount-value.fixed {
+    color: #3B82F6;
+}
+
+.discount-description {
+    background-color: var(--light-gray);
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    color: var(--gray);
+    margin-top: 0.25rem;
+}
+
+.discount-validity {
+    font-size: 0.7rem;
+    color: #EF4444;
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.discount-date {
+    font-size: 0.7rem;
+    color: var(--gray);
+}
+
+/* No Discount State */
+.no-discount {
+    text-align: center;
+    padding: 2rem;
+    color: var(--gray);
+    font-size: 0.875rem;
+}
+
+.no-discount i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+    opacity: 0.5;
+}
+
+/* Discount Actions */
+.discount-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
+/* Discount Summary Card */
+.discount-summary {
+    background: linear-gradient(135deg, #F8FAFC, #FFFFFF);
+    border-radius: 16px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.discount-summary-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+}
+
+.discount-summary-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* City Discount Badge in Header */
+.city-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Modal for City Discount */
+#cityDiscountModal .modal {
+    max-width: 500px;
+}
+
+/* Checkbox Styles */
+.form-checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.form-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--primary);
+}
+
+.form-checkbox-label {
+    font-weight: 500;
+    color: var(--gray);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+/* Valid Until Date Input */
+input[type="date"].form-input {
+    padding: 0.85rem 1rem;
+    font-family: inherit;
+}
+
+/* Small Hint Text */
+.form-hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
+    color: var(--gray);
+}
+
+/* Animation for Discount Application */
+@keyframes discountFlash {
+    0% { background: var(--light-gray); }
+    50% { background: #D1FAE5; }
+    100% { background: var(--light-gray); }
+}
+
+.discount-flash {
+    animation: discountFlash 0.5s ease;
+}
+
+/* Tooltip for Discount Info */
+.discount-indicator {
+    position: relative;
+    cursor: help;
+}
+
+.discount-indicator:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--dark);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+}
+
+/* Responsive Adjustments for Discount Elements */
+@media (max-width: 768px) {
+    .price-container {
+        gap: 0.15rem;
+    }
+    
+    .original-price {
+        font-size: 0.6rem;
+    }
+    
+    .discounted-price {
+        font-size: 0.75rem;
+    }
+    
+    .discount-indicator {
+        font-size: 0.55rem;
+        margin-left: 0.25rem;
+    }
+    
+    .city-discount-badge {
+        font-size: 0.55rem;
+        padding: 0.1rem 0.3rem;
+    }
+    
+    .discount-info-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+}
+
+/* Print Styles - Hide Discount Info When Printing */
+@media print {
+    .discount-indicator,
+    .discount-badge,
+    .city-discount-badge,
+    .original-price {
+        display: none;
+    }
+    
+    .discounted-price {
+        color: black;
+    }
+}
+
+/* Dark Mode Support (if needed) */
+@media (prefers-color-scheme: dark) {
+    /* Optional dark mode styles - uncomment if dark mode is supported */
+    /*
+    :root {
+        --light-gray: #1E293B;
+        --border: #334155;
+        --dark: #F1F5F9;
+    }
+    
+    .price-cell.has-discount {
+        background: linear-gradient(135deg, #064E3B, #065F46);
+    }
+    */
+}

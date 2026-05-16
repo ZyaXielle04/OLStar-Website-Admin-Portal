@@ -19,6 +19,48 @@ class UserManager {
         return meta ? meta.getAttribute("content") : null;
     }
 
+    // Helper function to get CSRF token from cookie
+    getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'XSRF-TOKEN') {
+                return decodeURIComponent(value);
+            }
+        }
+        return null;
+    }
+
+    // Helper function for API requests with CSRF token
+    async apiRequest(url, options = {}) {
+        const method = options.method || 'GET';
+        const csrfToken = this.getCsrfToken();
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+        
+        // Add CSRF token for non-GET requests
+        if (method !== 'GET' && csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+        
+        const config = {
+            ...options,
+            method,
+            headers,
+            credentials: 'include'  // Important for cookies
+        };
+        
+        // Don't set body for GET requests
+        if (method === 'GET' && config.body) {
+            delete config.body;
+        }
+        
+        return fetch(url, config);
+    }
+
     init() {
         this.loadUsers();
         this.bindEvents();
@@ -31,7 +73,7 @@ class UserManager {
 
     async loadUsers() {
         try {
-            const res = await fetch(`/api/users/${this.apiType}`);
+            const res = await this.apiRequest(`/api/users/${this.apiType}`);
             if (!res.ok) {
                 throw new Error("Failed to load users");
             }
@@ -58,8 +100,8 @@ class UserManager {
                     ${this.canDelete()
                         ? `<button class="btn btn-delete" onclick="userManager.deleteUser('${u.id}')">Delete</button>`
                         : ''}
-                </td>
-            </tr>
+                 </td>
+             </tr>
         `).join("");
     }
 
@@ -123,7 +165,7 @@ class UserManager {
         this.currentEditId = id;
         
         try {
-            const res = await fetch(`/api/user/${id}`);
+            const res = await this.apiRequest(`/api/user/${id}`);
             if (!res.ok) {
                 throw new Error("Failed to load user");
             }
@@ -217,9 +259,8 @@ class UserManager {
         const method = id ? "PUT" : "POST";
         
         try {
-            const res = await fetch(url, {
+            const res = await this.apiRequest(url, {
                 method,
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
             
@@ -249,7 +290,7 @@ class UserManager {
         // Get user name for the confirmation message
         let userName = "";
         try {
-            const res = await fetch(`/api/user/${id}`);
+            const res = await this.apiRequest(`/api/user/${id}`);
             if (res.ok) {
                 const user = await res.json();
                 userName = user.fullName || "";
@@ -266,7 +307,9 @@ class UserManager {
             type: "danger",
             onConfirm: async () => {
                 try {
-                    const res = await fetch(`/api/user/delete/${id}`, { method: "DELETE" });
+                    const res = await this.apiRequest(`/api/user/delete/${id}`, { 
+                        method: "DELETE" 
+                    });
                     const data = await res.json();
                     
                     if (!res.ok) {
@@ -307,8 +350,7 @@ class UserManager {
 
     async loadTransportUnits() {
         try {
-            // Change this line:
-            const res = await fetch('/api/common/transport-units');
+            const res = await this.apiRequest('/api/common/transport-units');
             
             if (res.status === 404) {
                 console.warn('Transport units API not available (404)');

@@ -1,5 +1,5 @@
 // ============================================
-// Packages Management Functions
+// Packages Management Functions WITH CSRF SUPPORT
 // ============================================
 
 let allPackages = [];
@@ -22,6 +22,47 @@ const userRole =
         ?.innerText
         ?.toLowerCase() || 'admin';
 
+// Helper function to get CSRF token from cookie
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'XSRF-TOKEN') {
+            return decodeURIComponent(value);
+        }
+    }
+    return null;
+}
+
+// Helper function for API requests with CSRF token
+async function apiRequest(url, options = {}) {
+    const method = options.method || 'GET';
+    const csrfToken = getCsrfToken();
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    // Add CSRF token for non-GET requests
+    if (method !== 'GET' && csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    const config = {
+        ...options,
+        method,
+        headers,
+        credentials: 'include'  // Important for cookies
+    };
+    
+    // Don't set body for GET requests
+    if (method === 'GET' && config.body) {
+        delete config.body;
+    }
+    
+    return fetch(url, config);
+}
 
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -73,7 +114,7 @@ async function loadPackages(forceRefresh = false) {
 
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch('/api/common/packages', {
+        const response = await apiRequest('/api/common/packages', {
             signal: controller.signal
         });
 
@@ -118,7 +159,7 @@ function prefetchData() {
 
         setTimeout(() => {
 
-            fetch('/api/common/packages')
+            apiRequest('/api/common/packages')
                 .then(res => res.json())
                 .then(data => {
                     cachedPackages = data.packages || [];
@@ -416,7 +457,7 @@ function showSkeleton(show) {
                     <td><div class="skeleton-cell"></div></td>
                     <td><div class="skeleton-cell"></div></td>
                     <td><div class="skeleton-cell"></div></td>
-                </tr>
+                </table>
             `);
         }
 
@@ -463,7 +504,7 @@ function deletePackage(packageId, packageName) {
             try {
 
                 const response =
-                    await fetch(`/api/common/packages/${packageId}`, {
+                    await apiRequest(`/api/common/packages/${packageId}`, {
                         method: 'DELETE'
                     });
 

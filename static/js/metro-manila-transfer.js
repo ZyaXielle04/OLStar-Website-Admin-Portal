@@ -1,5 +1,5 @@
 // ============================================
-// Metro Manila Transfer Rates Management - WITH DISCOUNTS
+// Metro Manila Transfer Rates Management - WITH DISCOUNTS AND CSRF SUPPORT
 // ============================================
 
 let allPackages = [];
@@ -18,6 +18,48 @@ let currentCityDiscountName = null;
 const CACHE_DURATION = 30000; // 30 seconds cache
 const DEBOUNCE_DELAY = 300;
 const userRole = document.querySelector('.user-role')?.innerText?.toLowerCase() || 'admin';
+
+// Helper function to get CSRF token from cookie
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'XSRF-TOKEN') {
+            return decodeURIComponent(value);
+        }
+    }
+    return null;
+}
+
+// Helper function for API requests with CSRF token
+async function apiRequest(url, options = {}) {
+    const method = options.method || 'GET';
+    const csrfToken = getCsrfToken();
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    // Add CSRF token for non-GET requests
+    if (method !== 'GET' && csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    const config = {
+        ...options,
+        method,
+        headers,
+        credentials: 'include'  // Important for cookies
+    };
+    
+    // Don't set body for GET requests
+    if (method === 'GET' && config.body) {
+        delete config.body;
+    }
+    
+    return fetch(url, config);
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     // Check for prefetched data
@@ -58,7 +100,7 @@ async function loadData(forceRefresh = false) {
         pendingRequest = controller;
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const response = await fetch('/api/common/metro-manila-transfer/matrix', {
+        const response = await apiRequest('/api/common/metro-manila-transfer/matrix', {
             signal: controller.signal
         });
         
@@ -103,7 +145,7 @@ async function loadData(forceRefresh = false) {
 function prefetchData() {
     if (!cachedData && !isLoading) {
         setTimeout(() => {
-            fetch('/api/common/metro-manila-transfer/matrix')
+            apiRequest('/api/common/metro-manila-transfer/matrix')
                 .then(res => res.json())
                 .then(data => {
                     cachedData = data;
@@ -296,7 +338,7 @@ function renderFareMatrix() {
     let bodyHtml = '';
     displayOrigins.forEach(origin => {
         bodyHtml += '<tr>';
-        bodyHtml += `<td class="origin-cell"><strong>${escapeHtml(origin.name)}</strong></td>`;
+        bodyHtml += `<td class="origin-cell"><strong>${escapeHtml(origin.name)}</strong><table>`;
         
         allCities.forEach(dest => {
             if (origin.key === dest.key) {
@@ -359,7 +401,7 @@ function renderFareMatrix() {
                         data-price="${originalPrice}">
                         ${displayHtml}
                         ${discountBadge}
-                     </td>
+                      </td>
                 `;
             }
         });
@@ -471,30 +513,24 @@ async function savePriceEdit(cell, newValue, origin, dest, packageName) {
     
     try {
         // Update forward route
-        const getForwardResponse = await fetch(`/api/common/metro-manila-transfer/rates/${origin}/${dest}`, {
-            credentials: 'include'
-        });
+        const getForwardResponse = await apiRequest(`/api/common/metro-manila-transfer/rates/${origin}/${dest}`);
         const forwardRouteData = await getForwardResponse.json();
         const forwardPrices = forwardRouteData.prices || {};
         forwardPrices[packageName] = price.toString();
         
-        await fetch(`/api/common/metro-manila-transfer/rates/${origin}/${dest}`, {
+        await apiRequest(`/api/common/metro-manila-transfer/rates/${origin}/${dest}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prices: forwardPrices })
         });
         
         // Update reverse route
-        const getReverseResponse = await fetch(`/api/common/metro-manila-transfer/rates/${dest}/${origin}`, {
-            credentials: 'include'
-        });
+        const getReverseResponse = await apiRequest(`/api/common/metro-manila-transfer/rates/${dest}/${origin}`);
         const reverseRouteData = await getReverseResponse.json();
         const reversePrices = reverseRouteData.prices || {};
         reversePrices[packageName] = price.toString();
         
-        await fetch(`/api/common/metro-manila-transfer/rates/${dest}/${origin}`, {
+        await apiRequest(`/api/common/metro-manila-transfer/rates/${dest}/${origin}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prices: reversePrices })
         });
         
@@ -548,7 +584,7 @@ async function editCityDiscount(cityKey, cityName) {
     
     // Check if city already has a discount
     try {
-        const response = await fetch(`/api/common/metro-manila-transfer/cities/${cityKey}/discount`);
+        const response = await apiRequest(`/api/common/metro-manila-transfer/cities/${cityKey}/discount`);
         const data = await response.json();
         
         if (data.hasDiscount) {
@@ -603,9 +639,8 @@ async function saveCityDiscount(e) {
     }
     
     try {
-        const response = await fetch(`/api/common/metro-manila-transfer/cities/${cityKey}/discount`, {
+        const response = await apiRequest(`/api/common/metro-manila-transfer/cities/${cityKey}/discount`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 type: discountType,
                 value: discountValue,
@@ -642,7 +677,7 @@ async function removeCityDiscount() {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/metro-manila-transfer/cities/${currentCityDiscountKey}/discount`, {
+                const response = await apiRequest(`/api/common/metro-manila-transfer/cities/${currentCityDiscountKey}/discount`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -736,9 +771,8 @@ async function saveCity(e) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
     
     try {
-        const response = await fetch('/api/common/metro-manila-transfer/cities', {
+        const response = await apiRequest('/api/common/metro-manila-transfer/cities', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: cityName })
         });
         
@@ -771,7 +805,7 @@ async function deleteCity(cityKey) {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/metro-manila-transfer/cities/${cityKey}`, {
+                const response = await apiRequest(`/api/common/metro-manila-transfer/cities/${cityKey}`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
@@ -793,7 +827,7 @@ async function deleteCity(cityKey) {
 
 async function toggleCityStatus(cityKey, currentStatus) {
     try {
-        const response = await fetch(`/api/common/metro-manila-transfer/cities/${cityKey}/toggle`, {
+        const response = await apiRequest(`/api/common/metro-manila-transfer/cities/${cityKey}/toggle`, {
             method: 'PATCH'
         });
         const data = await response.json();
@@ -831,9 +865,8 @@ async function saveRoutePrice(e) {
     }
     
     try {
-        const response = await fetch(`/api/common/metro-manila-transfer/rates/${origin}/${destination}`, {
+        const response = await apiRequest(`/api/common/metro-manila-transfer/rates/${origin}/${destination}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 prices: { [currentPackage]: price.toString() }
             })

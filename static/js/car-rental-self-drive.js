@@ -1,4 +1,4 @@
-// car-rental-self-drive.js - Self-Drive specific logic
+// car-rental-self-drive.js - Self-Drive specific logic with CSRF support
 (function() {
     'use strict';
     
@@ -21,6 +21,45 @@
     
     const API_BASE_URL = '/api/common/car-rental';
     
+    // Helper function to get CSRF token from cookie
+    function getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'XSRF-TOKEN') {
+                return decodeURIComponent(value);
+            }
+        }
+        return null;
+    }
+    
+    // Helper function for API requests with CSRF token
+    async function apiRequest(url, options = {}) {
+        const method = options.method || 'GET';
+        const csrfToken = getCsrfToken();
+        
+        const defaultHeaders = {
+            'Content-Type': 'application/json',
+        };
+        
+        // Add CSRF token for non-GET requests
+        if (method !== 'GET' && csrfToken) {
+            defaultHeaders['X-CSRFToken'] = csrfToken;
+        }
+        
+        const config = {
+            ...options,
+            method,
+            headers: {
+                ...defaultHeaders,
+                ...options.headers
+            },
+            credentials: 'include'  // Important for cookies
+        };
+        
+        return fetch(url, config);
+    }
+    
     function showNotification(message, type = 'success') {
         if (typeof window.showNotificationGlobal === 'function') {
             window.showNotificationGlobal(message, type);
@@ -38,7 +77,7 @@
     
     async function getSessionRole() {
         try {
-            const response = await fetch('/api/v1/auth/session/check');
+            const response = await apiRequest('/api/v1/auth/session/check');
             const data = await response.json();
             if (data.authenticated && data.user && data.user.role) {
                 return data.user.role;
@@ -149,7 +188,7 @@
     
     async function loadLocations() {
         try {
-            const response = await fetch(`${API_BASE_URL}/locations`);
+            const response = await apiRequest(`${API_BASE_URL}/locations`);
             if (!response.ok) throw new Error('Failed to load locations');
             const data = await response.json();
             currentData.locations = data.locations;
@@ -263,15 +302,13 @@
         try {
             let response;
             if (key) {
-                response = await fetch(`${API_BASE_URL}/locations/${key}`, {
+                response = await apiRequest(`${API_BASE_URL}/locations/${key}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, deliveryFeeFromPasay })
                 });
             } else {
-                response = await fetch(`${API_BASE_URL}/locations`, {
+                response = await apiRequest(`${API_BASE_URL}/locations`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, deliveryFeeFromPasay })
                 });
             }
@@ -310,7 +347,7 @@
     
     async function toggleLocation(locationKey) {
         try {
-            const response = await fetch(`${API_BASE_URL}/locations/${locationKey}/toggle`, { method: 'PATCH' });
+            const response = await apiRequest(`${API_BASE_URL}/locations/${locationKey}/toggle`, { method: 'PATCH' });
             if (!response.ok) throw new Error('Failed to toggle location');
             const data = await response.json();
             showNotification(data.message);
@@ -331,7 +368,7 @@
         if (!confirmed) return;
         
         try {
-            const response = await fetch(`${API_BASE_URL}/locations/${locationKey}`, { method: 'DELETE' });
+            const response = await apiRequest(`${API_BASE_URL}/locations/${locationKey}`, { method: 'DELETE' });
             if (!response.ok) throw new Error('Failed to delete location');
             showNotification('Location deleted successfully');
             await loadLocations();
@@ -344,7 +381,7 @@
     
     async function loadDurations() {
         try {
-            const response = await fetch(`${API_BASE_URL}/durations`);
+            const response = await apiRequest(`${API_BASE_URL}/durations`);
             if (!response.ok) throw new Error('Failed to load durations');
             const data = await response.json();
             currentData.durations = data.durations;
@@ -396,9 +433,8 @@
         }
         
         try {
-            const response = await fetch(`${API_BASE_URL}/durations`, {
+            const response = await apiRequest(`${API_BASE_URL}/durations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, hours })
             });
             if (!response.ok) {
@@ -418,7 +454,7 @@
     
     async function toggleDuration(durationKey) {
         try {
-            const response = await fetch(`${API_BASE_URL}/durations/${durationKey}/toggle`, { method: 'PATCH' });
+            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}/toggle`, { method: 'PATCH' });
             if (!response.ok) throw new Error('Failed to toggle duration');
             const data = await response.json();
             showNotification(data.message);
@@ -440,7 +476,7 @@
         if (!confirmed) return;
         
         try {
-            const response = await fetch(`${API_BASE_URL}/durations/${durationKey}`, { method: 'DELETE' });
+            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}`, { method: 'DELETE' });
             if (!response.ok) throw new Error('Failed to delete duration');
             showNotification('Duration deleted successfully');
             await loadDurations();
@@ -454,7 +490,7 @@
     
     async function loadTransportUnits() {
         try {
-            const response = await fetch(`${API_BASE_URL}/transport-units`);
+            const response = await apiRequest(`${API_BASE_URL}/transport-units`);
             if (!response.ok) throw new Error('Failed to load transport units');
             const data = await response.json();
             currentData.transportUnits = data.transportUnits;
@@ -512,7 +548,7 @@
     
     async function loadRateTableData() {
         try {
-            const response = await fetch(`${API_BASE_URL}/table-data`);
+            const response = await apiRequest(`${API_BASE_URL}/table-data`);
             if (!response.ok) throw new Error('Failed to load table data');
             const data = await response.json();
             currentData.transportUnits = data.transportUnits;
@@ -623,7 +659,7 @@
             rowsHtml += `<td>
                 <div class="unit-name">${escapeHtml(unit.name)}</div>
                 <div class="unit-details">${escapeHtml(unit.unitType)} | ${escapeHtml(unit.plateNumber)}</div>
-            </td>`;
+             </div>`;
             
             for (const duration of activeDurations) {
                 const hourKey = duration.key;
@@ -636,7 +672,7 @@
                         <span class="total-price"><strong>Total: ₱${formatNumber(totalPrice)}</strong></span>
                         <span class="price-breakdown">+ ₱${formatNumber(deliveryFee)} delivery</span>
                     </div>
-                </td>`;
+                 </td>`;
             }
             
             rowsHtml += '</tr>';
@@ -649,7 +685,7 @@
         // Get role directly from session instead of using cached variable
         let role = null;
         try {
-            const response = await fetch('/api/v1/auth/session/check');
+            const response = await apiRequest('/api/v1/auth/session/check');
             const data = await response.json();
             role = data.authenticated && data.user ? data.user.role : null;
         } catch (error) {
@@ -682,9 +718,8 @@
             const newBaseRate = parseInt(input.value) || 0;
             
             try {
-                const response = await fetch(`${API_BASE_URL}/rates`, {
+                const response = await apiRequest(`${API_BASE_URL}/rates`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         transportUnitId: unitId, 
                         rateType: rateType,

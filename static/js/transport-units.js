@@ -1,5 +1,5 @@
 // ============================================
-// Transport Units Management Functions - FULLY OPTIMIZED
+// Transport Units Management Functions - WITH CSRF SUPPORT
 // ============================================
 
 let allUnits = [];
@@ -21,6 +21,48 @@ const DEBOUNCE_DELAY = 300;
 
 // Get current user role from session
 const userRole = document.querySelector('.user-role')?.innerText?.toLowerCase() || 'admin';
+
+// Helper function to get CSRF token from cookie
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'XSRF-TOKEN') {
+            return decodeURIComponent(value);
+        }
+    }
+    return null;
+}
+
+// Helper function for API requests with CSRF token
+async function apiRequest(url, options = {}) {
+    const method = options.method || 'GET';
+    const csrfToken = getCsrfToken();
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    // Add CSRF token for non-GET requests
+    if (method !== 'GET' && csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    const config = {
+        ...options,
+        method,
+        headers,
+        credentials: 'include'  // Important for cookies
+    };
+    
+    // Don't set body for GET requests
+    if (method === 'GET' && config.body) {
+        delete config.body;
+    }
+    
+    return fetch(url, config);
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     // Check for prefetched data
@@ -64,7 +106,7 @@ async function loadUnits(forceRefresh = false) {
         pendingRequest = controller;
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const response = await fetch('/api/common/transport-units', {
+        const response = await apiRequest('/api/common/transport-units', {
             signal: controller.signal
         });
         
@@ -112,7 +154,7 @@ function prefetchData() {
     // Prefetch data for next page load
     if (!cachedUnits && !isLoading) {
         setTimeout(() => {
-            fetch('/api/common/transport-units')
+            apiRequest('/api/common/transport-units')
                 .then(res => res.json())
                 .then(data => {
                     cachedUnits = data.units || [];
@@ -306,6 +348,7 @@ function renderUnitsTable(units, totalCount) {
         }
         
         row.innerHTML = `
+            <td>${imageHtml}</td>
             <td><strong>${escapeHtml(unit.id)}</strong></td>
             <td>${escapeHtml(unit.transportUnit)}</td>
             <td>${escapeHtml(unit.plateNumber)}</td>
@@ -503,7 +546,7 @@ async function toggleAvailability(unitId, currentStatus) {
         type: 'warning',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/transport-units/${unitId}/toggle-availability`, {
+                const response = await apiRequest(`/api/common/transport-units/${unitId}/toggle-availability`, {
                     method: 'PATCH'
                 });
                 
@@ -535,7 +578,7 @@ function deleteUnit(unitId, unitName) {
         type: 'danger',
         onConfirm: async () => {
             try {
-                const response = await fetch(`/api/common/transport-units/${unitId}`, {
+                const response = await apiRequest(`/api/common/transport-units/${unitId}`, {
                     method: 'DELETE'
                 });
                 

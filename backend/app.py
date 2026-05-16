@@ -1,11 +1,11 @@
 import os
 import sys
 import json
-import tempfile
+import secrets
 from datetime import timedelta
-from flask import Flask, request
+from flask import Flask, request, jsonify, session
 from dotenv import load_dotenv
-from flask_wtf import CSRFProtect
+from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from firebase_admin import credentials, initialize_app, _apps
@@ -71,6 +71,62 @@ app.config.update(
     WTF_CSRF_TIME_LIMIT=None
 )
 csrf = CSRFProtect(app)
+
+# -----------------------
+# CSRF Protection Middleware
+# -----------------------
+@app.before_request
+def check_csrf():
+    """Check CSRF token for state-changing methods"""
+    # Skip CSRF check for safe methods
+    if request.method not in ['POST', 'PUT', 'DELETE', 'PATCH']:
+        return
+    
+    # Skip for health check and test endpoints
+    if request.endpoint in ['health', 'test']:
+        return
+    
+    # Skip for static files
+    if request.endpoint and request.endpoint.startswith('static'):
+        return
+    
+    # Skip for API endpoints that use API keys (if you have mobile apps)
+    if request.headers.get('X-API-Key'):
+        return
+    
+    # Get CSRF token from header or cookie
+    token = request.headers.get('X-CSRFToken') or request.cookies.get('XSRF-TOKEN')
+    
+    if not token:
+        return jsonify({'error': 'CSRF token missing'}), 400
+    
+    # Get CSRF token from session
+    session_token = session.get('_csrf_token')
+    if not session_token or token != session_token:
+        return jsonify({'error': 'CSRF token invalid'}), 400
+
+@app.after_request
+def set_csrf_cookie(response):
+    """Set CSRF token cookie for the frontend"""
+    # Only set if user is authenticated (has session)
+    try:
+        # Generate CSRF token if it doesn't exist
+        if '_csrf_token' not in session:
+            session['_csrf_token'] = secrets.token_hex(32)
+        
+        response.set_cookie(
+            "XSRF-TOKEN",
+            session['_csrf_token'],
+            secure=(FLASK_ENV == "production"),
+            samesite="Lax",
+            httponly=False  # Must be false so JavaScript can read it
+        )
+    except Exception as e:
+        # If session is not accessible, just return response without setting cookie
+        print(f"Warning: Could not set CSRF cookie: {e}")
+        pass
+    
+    return response
 
 # -----------------------
 # Cloudinary configuration
@@ -172,21 +228,6 @@ auth_limiter.init_app(app)
 app.register_blueprint(auth_bp)
 app.register_blueprint(pages_bp)
 app.register_blueprint(api_bp)
-
-# -----------------------
-# Inject CSRF token cookie for JS
-# -----------------------
-@app.after_request
-def set_csrf_cookie(response):
-    from flask_wtf.csrf import generate_csrf
-    response.set_cookie(
-        "XSRF-TOKEN",
-        generate_csrf(),
-        secure=(FLASK_ENV == "production"),
-        samesite="Lax",
-        httponly=False
-    )
-    return response
 
 # -----------------------
 # Health check

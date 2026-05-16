@@ -54,6 +54,21 @@
     color: #1E293B;
 }
 
+/* Two Column Layout */
+.two-column-layout {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.categories-card {
+    flex: 2;
+}
+
+.discount-card {
+    flex: 1;
+}
+
 .btn {
     display: inline-flex;
     align-items: center;
@@ -86,6 +101,32 @@
 
 .btn-secondary:hover {
     background: #E2E8F0;
+}
+
+.btn-outline-primary {
+    background-color: transparent;
+    border: 1px solid #3b82f6;
+    color: #3b82f6;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-outline-primary:hover {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+    color: rgb(255, 145, 145);
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(239, 68, 68, 0.3);
 }
 
 .filter-controls {
@@ -201,6 +242,7 @@
 }
 
 .btn-area-edit,
+.btn-area-discount,
 .btn-area-delete {
     background: none;
     border: none;
@@ -208,6 +250,7 @@
     font-size: 0.7rem;
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
+    transition: all 0.2s;
 }
 
 .btn-area-edit {
@@ -216,6 +259,14 @@
 
 .btn-area-edit:hover {
     background: #DBEAFE;
+}
+
+.btn-area-discount {
+    color: #10B981;
+}
+
+.btn-area-discount:hover {
+    background: #D1FAE5;
 }
 
 .btn-area-delete {
@@ -243,12 +294,170 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    transition: all 0.2s;
 }
 
 .btn-icon-sm:hover {
     background: #EEF2FF;
 }
 
+/* Discount Card Styles */
+.discount-container {
+    padding: 0.5rem 0;
+}
+
+.discount-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.discount-info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.discount-info-item:last-child {
+    border-bottom: none;
+}
+
+.discount-label {
+    font-weight: 600;
+    color: #4b5563;
+    font-size: 0.875rem;
+}
+
+.discount-value {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.discount-value.percentage {
+    color: #10b981;
+}
+
+.discount-value.fixed {
+    color: #3b82f6;
+}
+
+.discount-description {
+    background-color: #f9fafb;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-top: 0.5rem;
+}
+
+.discount-description-small {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+.discount-validity {
+    font-size: 0.75rem;
+    color: #ef4444;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.discount-date {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.discount-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.no-discount {
+    text-align: center;
+    padding: 2rem;
+    color: #9ca3af;
+    font-size: 0.875rem;
+}
+
+.discount-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+    margin-top: 0.25rem;
+}
+
+.discount-badge-global {
+    display: inline-block;
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 20px;
+    margin-bottom: 0.75rem;
+}
+
+.discount-indicator {
+    display: inline-block;
+    margin-left: 0.5rem;
+    color: #10B981;
+    font-size: 0.7rem;
+    cursor: help;
+}
+
+/* Discounts List for Multiple Discounts */
+.discounts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.discount-item {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 0.75rem;
+    transition: all 0.2s;
+}
+
+.discount-item:hover {
+    border-color: #10B981;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+}
+
+.discount-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.discount-item-header strong {
+    color: #1E293B;
+    font-size: 0.9rem;
+}
+
+.discount-item-header small {
+    color: #64748B;
+    font-size: 0.7rem;
+}
+
+.discount-item .discount-value {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+/* Table Styles */
 .table-responsive {
     overflow-x: auto;
 }
@@ -272,17 +481,24 @@
     background: #F8FAFC;
     font-weight: 600;
     color: #475569;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .fare-matrix-table td:first-child {
     text-align: left;
     font-weight: 500;
     background: #F8FAFC;
+    position: sticky;
+    left: 0;
+    z-index: 5;
 }
 
 .price-cell {
     cursor: pointer;
     transition: all 0.2s;
+    position: relative;
 }
 
 .price-cell:hover {
@@ -293,11 +509,58 @@
     background: #FEF3C7;
 }
 
+.price-cell.has-discount {
+    background: #ECFDF5;
+}
+
+.price-cell.has-discount:hover {
+    background: #D1FAE5;
+}
+
 .price {
     font-weight: 600;
     color: #1E293B;
 }
 
+/* Inline price editing */
+.price-input-inline {
+    width: 80px;
+    padding: 0.5rem;
+    border: 2px solid #4F46E5;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    text-align: center;
+    font-family: inherit;
+    background: white;
+}
+
+.price-input-inline:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+}
+
+.price-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.25rem;
+}
+
+.price-display {
+    display: inline-block;
+    min-width: 60px;
+}
+
+/* Area cell styling */
+.area-cell {
+    text-align: left !important;
+    font-weight: 500;
+    background: #F8FAFC;
+    position: sticky;
+    left: 0;
+}
+
+/* Modal Styles */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -351,6 +614,7 @@
     font-size: 1.2rem;
     color: #64748B;
     cursor: pointer;
+    transition: all 0.2s;
 }
 
 .modal-close:hover {
@@ -377,9 +641,42 @@
     border: 2px solid #E2E8F0;
     border-radius: 16px;
     font-size: 0.95rem;
+    transition: all 0.2s;
 }
 
 .form-input:focus {
+    outline: none;
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-select {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: #4F46E5;
+}
+
+.form-textarea {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.form-textarea:focus {
     outline: none;
     border-color: #4F46E5;
 }
@@ -419,8 +716,15 @@
     padding: 0.5rem 0.75rem;
     border: 1px solid #CBD5E1;
     border-radius: 8px;
+    font-size: 0.85rem;
 }
 
+.price-input:focus {
+    outline: none;
+    border-color: #4F46E5;
+}
+
+/* Loading and Empty States */
 .loading-placeholder,
 .empty-state {
     text-align: center;
@@ -428,11 +732,27 @@
     color: #64748B;
 }
 
+.error-state {
+    text-align: center;
+    padding: 2rem;
+    color: #EF4444;
+}
+
 .text-center {
     text-align: center;
 }
 
+/* Responsive Design */
 @media (max-width: 768px) {
+    .two-column-layout {
+        flex-direction: column;
+    }
+    
+    .categories-card,
+    .discount-card {
+        flex: auto;
+    }
+    
     .categories-container {
         flex-direction: column;
     }
@@ -454,52 +774,264 @@
         width: 100%;
         justify-content: center;
     }
+    
+    .modal {
+        padding: 1.5rem;
+    }
+    
+    .discount-info-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
 }
 
-/* Inline price editing */
-.price-cell {
+/* Print Styles */
+@media print {
+    .btn,
+    .modal-overlay,
+    .category-actions,
+    .area-actions,
+    .filter-controls {
+        display: none;
+    }
+    
+    .card {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+}
+
+/* Category Discount Button Styles */
+.btn-category-discount {
+    background: none;
+    border: none;
     cursor: pointer;
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
     transition: all 0.2s;
-    position: relative;
+    color: #8B5CF6;
 }
 
-.price-cell.editable:hover {
-    background: #FEF3C7;
+.btn-category-discount:hover {
+    background: #EDE9FE;
 }
 
-.price-input-inline {
-    width: 80px;
-    padding: 0.5rem;
-    border: 2px solid #4F46E5;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    text-align: center;
-    font-family: inherit;
-    background: white;
-}
-
-.price-input-inline:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-}
-
-.price-loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 0.25rem;
-}
-
-.price-display {
+/* Category Discount Badge in Category Card */
+.category-discount-badge {
     display: inline-block;
-    min-width: 60px;
+    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    color: white;
+    font-size: 0.6rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+    font-weight: normal;
 }
 
-/* Area cell styling */
-.area-cell {
-    text-align: left !important;
+/* Category Discount Info in Category Header */
+.category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #E2E8F0;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.category-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Checkbox Styles */
+.form-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #4F46E5;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
     font-weight: 500;
-    background: #F8FAFC;
-    position: sticky;
-    left: 0;
+    color: #334155;
+    font-size: 0.85rem;
+}
+
+.checkbox-group {
+    padding: 0.5rem 0;
+}
+
+/* Remove Category Discount Button */
+.btn-remove-discount {
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+    color: white;
+    border: none;
+}
+
+.btn-remove-discount:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Disabled Input Styles */
+.form-input:disabled {
+    background: #F3F4F6;
+    color: #6B7280;
+    cursor: not-allowed;
+    border-color: #E5E7EB;
+}
+
+/* Category Discount Modal Specific */
+#categoryDiscountModal .modal {
+    max-width: 500px;
+}
+
+/* Hint/Small Text Styles */
+.form-hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.7rem;
+    color: #6B7280;
+}
+
+/* Divider Styles */
+.form-divider {
+    border-top: 1px solid #E2E8F0;
+    margin: 1rem 0;
+}
+
+/* Category Card Hover Effect for Discount Button */
+.category-actions .btn-icon-sm[onclick*="editCategoryDiscount"]:hover {
+    background: #EDE9FE;
+    border-color: #8B5CF6;
+    color: #6D28D9;
+}
+
+/* Animation for Discount Application */
+@keyframes discountPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.discount-badge-new {
+    animation: discountPulse 0.5s ease-in-out;
+}
+
+/* Category Discount Summary in Global Discount Card */
+.category-discount-summary {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #E2E8F0;
+}
+
+.category-discount-summary-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #8B5CF6;
+    margin-bottom: 0.25rem;
+}
+
+/* Responsive Adjustments for Category Actions */
+@media (max-width: 480px) {
+    .category-actions {
+        flex-direction: column;
+    }
+    
+    .category-actions .btn-icon-sm {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .category-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* Price Container for Discounted Prices */
+.price-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.original-price {
+    font-size: 0.7rem;
+    color: #6B7280;
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+
+.discounted-price {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #10B981;
+}
+
+.price-cell.has-discount {
+    background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+}
+
+.price-cell.has-discount:hover {
+    background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+}
+
+/* Price display for non-discounted */
+.price-display {
+    font-weight: 600;
+    color: #1E293B;
+}
+
+/* Responsive adjustments for price container */
+@media (max-width: 768px) {
+    .price-container {
+        gap: 0.15rem;
+    }
+    
+    .original-price {
+        font-size: 0.6rem;
+    }
+    
+    .discounted-price {
+        font-size: 0.75rem;
+    }
+}
+
+/* Discount Badge Styles */
+.discount-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+    margin-top: 0.25rem;
+    white-space: nowrap;
+}
+
+.discount-badge i {
+    margin-right: 0.2rem;
+    font-size: 0.6rem;
+}
+
+/* For smaller screens, allow badge to wrap */
+@media (max-width: 768px) {
+    .discount-badge {
+        white-space: normal;
+        font-size: 0.6rem;
+        padding: 0.15rem 0.4rem;
+    }
 }

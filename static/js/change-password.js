@@ -1,5 +1,5 @@
 // ============================================
-// Change Password Functionality with Reusable Toast
+// Change Password Functionality with Reusable Toast and CSRF Support
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -8,6 +8,43 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeModalBtn = document.getElementById('closeModalBtn');
     const cancelModalBtn = document.getElementById('cancelModalBtn');
     const changePasswordForm = document.getElementById('changePasswordForm');
+    
+    // Helper function to get CSRF token from cookie
+    function getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'XSRF-TOKEN') {
+                return decodeURIComponent(value);
+            }
+        }
+        return null;
+    }
+    
+    // Helper function for API requests with CSRF token
+    async function apiRequest(url, options = {}) {
+        const method = options.method || 'GET';
+        const csrfToken = getCsrfToken();
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+        
+        // Add CSRF token for non-GET requests
+        if (method !== 'GET' && csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+        
+        const config = {
+            ...options,
+            method,
+            headers,
+            credentials: 'include'  // Important for cookies
+        };
+        
+        return fetch(url, config);
+    }
     
     // Open modal
     if (changePasswordBtn) {
@@ -71,11 +108,9 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
             
             try {
-                const response = await fetch('/api/v1/auth/change-password', {
+                // Use apiRequest instead of fetch
+                const response = await apiRequest('/api/v1/auth/change-password', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
                     body: JSON.stringify({
                         oldPassword: currentPassword,
                         newPassword: newPassword

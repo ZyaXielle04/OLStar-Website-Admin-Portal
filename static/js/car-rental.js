@@ -1,8 +1,47 @@
-// car-rental.js - Main controller
+// car-rental.js - Main controller with CSRF support
 (function() {
     'use strict';
     
     let sessionRole = null;
+    
+    // Helper function to get CSRF token from cookie
+    function getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'XSRF-TOKEN') {
+                return decodeURIComponent(value);
+            }
+        }
+        return null;
+    }
+    
+    // Helper function for API requests with CSRF token
+    async function apiRequest(url, options = {}) {
+        const method = options.method || 'GET';
+        const csrfToken = getCsrfToken();
+        
+        const defaultHeaders = {
+            'Content-Type': 'application/json',
+        };
+        
+        // Add CSRF token for non-GET requests
+        if (method !== 'GET' && csrfToken) {
+            defaultHeaders['X-CSRFToken'] = csrfToken;
+        }
+        
+        const config = {
+            ...options,
+            method,
+            headers: {
+                ...defaultHeaders,
+                ...options.headers
+            },
+            credentials: 'include'  // Important for cookies
+        };
+        
+        return fetch(url, config);
+    }
     
     // Global notification function that both modules can use
     window.showNotificationGlobal = function(message, type = 'success') {
@@ -16,10 +55,16 @@
         }, 3000);
     };
     
-    // Get session role
+    // Get session role (now uses apiRequest)
     window.getSessionRole = function() {
         return sessionRole;
     };
+    
+    // Global CSRF token getter for other modules to use
+    window.getCsrfToken = getCsrfToken;
+    
+    // Global API request helper for other modules to use
+    window.apiRequest = apiRequest;
     
     // ========== TAB SWITCHING ==========
     function initializeTabs() {
@@ -67,6 +112,20 @@
     async function initialize() {
         const roleElement = document.querySelector('meta[name="user-role"]');
         sessionRole = roleElement ? roleElement.content : 'admin';
+        
+        // Get session role from backend if meta tag not available or for verification
+        if (!sessionRole || sessionRole === 'admin') {
+            try {
+                const response = await apiRequest('/api/v1/auth/session/check');
+                const data = await response.json();
+                if (data.authenticated && data.user && data.user.role) {
+                    sessionRole = data.user.role;
+                    console.log('Session role fetched:', sessionRole);
+                }
+            } catch (error) {
+                console.error('Error fetching session role:', error);
+            }
+        }
         
         // Initialize Self-Drive (always loaded first)
         if (window.selfDrive && typeof window.selfDrive.initialize === 'function') {
