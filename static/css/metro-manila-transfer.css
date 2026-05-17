@@ -467,15 +467,15 @@
     width: 100%;
     padding: 0.85rem 1rem;
     background: #FFFFFF;
-    border: 2px solid var(--border);
+    border: 2px solid #E2E8F0;
     border-radius: 16px;
     font-size: 0.95rem;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
 }
 
 .form-input:focus {
     outline: none;
-    border-color: var(--primary);
+    border-color: #4F46E5;
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
@@ -915,6 +915,37 @@
     color: var(--gray);
     font-size: 0.85rem;
     cursor: pointer;
+}
+
+.form-select {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: #4F46E5;
+}
+
+.form-textarea {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    border-radius: 16px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.form-textarea:focus {
+    outline: none;
+    border-color: #4F46E5;
 }
 
 /* Valid Until Date Input */

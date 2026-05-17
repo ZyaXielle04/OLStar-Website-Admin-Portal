@@ -1,4 +1,4 @@
-// car-rental-self-drive.js - Self-Drive specific logic with CSRF support
+// car-rental-self-drive.js - Self-Drive specific logic with CSRF support and Discounts
 (function() {
     'use strict';
     
@@ -7,7 +7,8 @@
     let currentData = {
         transportUnits: [],
         durations: [],
-        rates: {},
+        prices: {},           // Original prices from /prices
+        discountedPrices: {}, // Discounted prices from /discountedPrices
         locations: []
     };
     
@@ -18,6 +19,7 @@
     let currentUnitTypeFilter = 'all';
     let availableUnitTypes = [];
     let sessionRole = null;
+    let currentDiscountData = null;
     
     const API_BASE_URL = '/api/common/car-rental';
     
@@ -42,7 +44,6 @@
             'Content-Type': 'application/json',
         };
         
-        // Add CSRF token for non-GET requests
         if (method !== 'GET' && csrfToken) {
             defaultHeaders['X-CSRFToken'] = csrfToken;
         }
@@ -54,7 +55,7 @@
                 ...defaultHeaders,
                 ...options.headers
             },
-            credentials: 'include'  // Important for cookies
+            credentials: 'include'
         };
         
         return fetch(url, config);
@@ -109,6 +110,18 @@
     function formatNumber(value) {
         if (!value || value === '0') return '0';
         return parseInt(value).toLocaleString();
+    }
+    
+    function formatPriceWithDiscount(originalPrice, discountedPrice, hasDiscount) {
+        if (hasDiscount && discountedPrice !== originalPrice && originalPrice > 0) {
+            return `
+                <div class="price-container">
+                    <span class="original-price">₱${formatNumber(originalPrice)}</span>
+                    <span class="discounted-price">₱${formatNumber(discountedPrice)}</span>
+                </div>
+            `;
+        }
+        return `<span class="price-display">₱${formatNumber(originalPrice)}</span>`;
     }
 
     // Custom confirmation modal
@@ -192,7 +205,6 @@
             if (!response.ok) throw new Error('Failed to load locations');
             const data = await response.json();
             currentData.locations = data.locations;
-            console.log('Locations loaded:', currentData.locations);
             displayLocations(data.locations);
             updateLocationSelects();
             
@@ -500,6 +512,212 @@
         }
     }
     
+    // ========== DISCOUNT MANAGEMENT ==========
+    
+    async function loadDiscountSettings() {
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/discount`);
+            const data = await response.json();
+            
+            if (data.hasDiscount) {
+                currentDiscountData = data.discount;
+                renderDiscountInfo(currentDiscountData);
+            } else {
+                renderNoDiscount();
+            }
+        } catch (error) {
+            console.error('Error loading discount settings:', error);
+            renderNoDiscount();
+        }
+    }
+    
+    function renderDiscountInfo(discount) {
+        const container = document.getElementById('discountContainer');
+        if (!container) return;
+        
+        if (!discount) {
+            renderNoDiscount();
+            return;
+        }
+        
+        const discountValue = discount.discountType === 'percentage' 
+            ? `${discount.value}% OFF` 
+            : `₱${parseFloat(discount.value).toLocaleString()} OFF`;
+        
+        const discountClass = discount.discountType === 'percentage' ? 'percentage' : 'fixed';
+        
+        let validityHtml = '';
+        if (discount.validUntil) {
+            const validUntil = new Date(discount.validUntil);
+            const today = new Date();
+            const isExpired = validUntil < today;
+            validityHtml = `
+                <div class="discount-validity">
+                    <i class="fas ${isExpired ? 'fa-exclamation-triangle' : 'fa-calendar-alt'}"></i>
+                    Valid until: ${validUntil.toLocaleDateString()}
+                    ${isExpired ? '<span style="color: #ef4444;"> (Expired)</span>' : ''}
+                </div>
+            `;
+        }
+        
+        container.innerHTML = `
+            <div class="discount-info">
+                <div class="discount-info-item">
+                    <span class="discount-label">Current Discount:</span>
+                    <span class="discount-value ${discountClass}">${discountValue}</span>
+                </div>
+                ${discount.description ? `
+                <div class="discount-info-item">
+                    <span class="discount-label">Description:</span>
+                    <span class="discount-description">${escapeHtml(discount.description)}</span>
+                </div>
+                ` : ''}
+                ${validityHtml}
+                <div class="discount-info-item">
+                    <span class="discount-label">Created:</span>
+                    <span class="discount-date">${new Date(discount.createdAt).toLocaleDateString()}</span>
+                </div>
+                ${sessionRole === 'superadmin' ? `
+                <div class="discount-actions" style="margin-top: 0.75rem;">
+                    <button class="btn-icon-sm" onclick="window.selfDrive.openDiscountModal()">
+                        <i class="fas fa-edit"></i> Edit Discount
+                    </button>
+                    <button class="btn-icon-sm btn-danger" onclick="window.selfDrive.removeGlobalDiscount()">
+                        <i class="fas fa-trash"></i> Remove Discount
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    function renderNoDiscount() {
+        const container = document.getElementById('discountContainer');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="no-discount">
+                <i class="fas fa-tag" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                <p>No active global discount</p>
+                <small>Click Manage Discount to add a global discount that will apply to all rates</small>
+                ${sessionRole === 'superadmin' ? `
+                <div class="discount-actions" style="margin-top: 0.75rem;">
+                    <button class="btn-icon-sm" onclick="window.selfDrive.openDiscountModal()">
+                        <i class="fas fa-plus"></i> Add Global Discount
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    function openDiscountModal() {
+        const modal = document.getElementById('discountModal');
+        if (!modal) return;
+        
+        if (currentDiscountData) {
+            document.getElementById('discountType').value = currentDiscountData.discountType || 'percentage';
+            document.getElementById('discountValue').value = currentDiscountData.value || '';
+            document.getElementById('discountDescription').value = currentDiscountData.description || '';
+            document.getElementById('discountValidUntil').value = currentDiscountData.validUntil || '';
+        } else {
+            const form = document.getElementById('discountForm');
+            if (form) form.reset();
+            document.getElementById('discountType').value = 'percentage';
+        }
+        
+        modal.style.display = 'flex';
+    }
+    
+    function closeDiscountModal() {
+        const modal = document.getElementById('discountModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    async function saveGlobalDiscount(e) {
+        e.preventDefault();
+        
+        const discountType = document.getElementById('discountType').value;
+        const discountValue = document.getElementById('discountValue').value;
+        const description = document.getElementById('discountDescription').value;
+        const validUntil = document.getElementById('discountValidUntil').value;
+        const applyToAll = document.getElementById('applyToAll')?.checked || false;
+        
+        if (!discountValue) {
+            showNotification('Discount value is required', 'error');
+            return;
+        }
+        
+        const valueNum = parseFloat(discountValue);
+        if (discountType === 'percentage' && (valueNum < 0 || valueNum > 100)) {
+            showNotification('Percentage must be between 0 and 100', 'error');
+            return;
+        }
+        
+        if (discountType === 'fixed' && valueNum < 0) {
+            showNotification('Fixed discount cannot be negative', 'error');
+            return;
+        }
+        
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/discount`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    discountType,
+                    value: discountValue,
+                    description,
+                    validUntil,
+                    applyToAll
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                showNotification('Global discount applied successfully!', 'success');
+                closeDiscountModal();
+                await loadDiscountSettings();
+                await loadRateTableData();
+            } else {
+                showNotification(data.error || 'Failed to save discount settings', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving discount:', error);
+            showNotification('An unexpected error occurred', 'error');
+        }
+    }
+    
+    async function removeGlobalDiscount() {
+        const confirmed = await showConfirmModal(
+            'Remove Global Discount',
+            'Are you sure you want to remove the global discount? This will remove discount from all rates.',
+            'Remove',
+            'Cancel'
+        );
+        
+        if (!confirmed) return;
+        
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/discount?removeFromRates=true`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            
+            if (response.ok) {
+                showNotification('Global discount removed successfully', 'success');
+                await loadDiscountSettings();
+                await loadRateTableData();
+            } else {
+                showNotification(data.error || 'Failed to remove discount', 'error');
+            }
+        } catch (error) {
+            console.error('Error removing discount:', error);
+            showNotification('An unexpected error occurred', 'error');
+        }
+    }
+    
     // ========== UNIT TYPE FILTER ==========
     
     function extractUnitTypes() {
@@ -553,8 +771,14 @@
             const data = await response.json();
             currentData.transportUnits = data.transportUnits;
             currentData.durations = data.durations;
-            currentData.rates = data.rates;
+            currentData.prices = data.prices || {};           // Original prices
+            currentData.discountedPrices = data.discountedPrices || {}; // Discounted prices
             currentData.locations = data.locations;
+            
+            if (data.discount) {
+                currentDiscountData = data.discount;
+                renderDiscountInfo(currentDiscountData);
+            }
             
             extractUnitTypes();
             
@@ -571,14 +795,43 @@
         return location ? location.deliveryFeeFromPasay : 0;
     }
     
-    function getRateForUnit(unitId, rateType, locationKey, durationKey) {
-        if (currentData.rates[unitId] && 
-            currentData.rates[unitId][rateType] && 
-            currentData.rates[unitId][rateType][locationKey] && 
-            currentData.rates[unitId][rateType][locationKey][durationKey]) {
-            return parseInt(currentData.rates[unitId][rateType][locationKey][durationKey]);
+    // Get the display rate (prefer discounted price if available, otherwise original)
+    function getDisplayRate(unitId, rateType, locationKey, durationKey) {
+        // First try to get discounted price
+        if (currentData.discountedPrices[unitId] && 
+            currentData.discountedPrices[unitId][rateType] && 
+            currentData.discountedPrices[unitId][rateType][locationKey] && 
+            currentData.discountedPrices[unitId][rateType][locationKey][durationKey]) {
+            return parseInt(currentData.discountedPrices[unitId][rateType][locationKey][durationKey]);
+        }
+        
+        // Fall back to original price
+        if (currentData.prices[unitId] && 
+            currentData.prices[unitId][rateType] && 
+            currentData.prices[unitId][rateType][locationKey] && 
+            currentData.prices[unitId][rateType][locationKey][durationKey]) {
+            return parseInt(currentData.prices[unitId][rateType][locationKey][durationKey]);
         }
         return 0;
+    }
+    
+    // Get the original price for display (strikethrough)
+    function getOriginalPrice(unitId, rateType, locationKey, durationKey) {
+        if (currentData.prices[unitId] && 
+            currentData.prices[unitId][rateType] && 
+            currentData.prices[unitId][rateType][locationKey] && 
+            currentData.prices[unitId][rateType][locationKey][durationKey]) {
+            return parseInt(currentData.prices[unitId][rateType][locationKey][durationKey]);
+        }
+        return 0;
+    }
+    
+    // Check if a discounted price exists for this rate
+    function hasDiscountedPrice(unitId, rateType, locationKey, durationKey) {
+        return currentData.discountedPrices[unitId] && 
+               currentData.discountedPrices[unitId][rateType] && 
+               currentData.discountedPrices[unitId][rateType][locationKey] && 
+               currentData.discountedPrices[unitId][rateType][locationKey][durationKey];
     }
     
     function renderRateTable() {
@@ -663,14 +916,37 @@
             
             for (const duration of activeDurations) {
                 const hourKey = duration.key;
-                const baseRate = getRateForUnit(unit.id, rateType, rateLocationKey, hourKey);
-                const totalPrice = baseRate + deliveryFee;
+                const originalPrice = getOriginalPrice(unit.id, rateType, rateLocationKey, hourKey);
+                const displayRate = getDisplayRate(unit.id, rateType, rateLocationKey, hourKey);
+                const hasDiscount = hasDiscountedPrice(unit.id, rateType, rateLocationKey, hourKey);
                 
-                rowsHtml += `<td class="rate-price" data-unit-id="${unit.id}" data-rate-type="${rateType}" data-location-key="${rateLocationKey}" data-duration-key="${hourKey}" data-current-rate="${baseRate}">
+                let discountBadge = '';
+                if (hasDiscount && originalPrice > 0 && displayRate !== originalPrice) {
+                    // Find discount info from currentDiscountData
+                    if (currentDiscountData) {
+                        const discountValue = currentDiscountData.discountType === 'percentage' 
+                            ? `${currentDiscountData.value}% OFF`
+                            : `₱${parseFloat(currentDiscountData.value).toLocaleString()} OFF`;
+                        discountBadge = `<span class="discount-indicator" title="${discountValue}">${discountValue}</span>`;
+                    }
+                }
+                
+                const totalPrice = displayRate + deliveryFee;
+                const priceHtml = formatPriceWithDiscount(originalPrice, displayRate, hasDiscount && displayRate !== originalPrice);
+                
+                rowsHtml += `<td class="rate-price ${hasDiscount ? 'has-discount' : ''}" 
+                    data-unit-id="${unit.id}" 
+                    data-rate-type="${rateType}" 
+                    data-location-key="${rateLocationKey}" 
+                    data-duration-key="${hourKey}" 
+                    data-current-rate="${originalPrice}">
                     <div class="price-info">
-                        <span class="base-price">Rate: ₱${formatNumber(baseRate)} (${duration.hours}hrs)</span><br>
-                        <span class="total-price"><strong>Total: ₱${formatNumber(totalPrice)}</strong></span>
-                        <span class="price-breakdown">+ ₱${formatNumber(deliveryFee)} delivery</span>
+                        ${priceHtml}
+                        ${discountBadge}
+                        <div class="total-price-info">
+                            <strong>Total: ₱${formatNumber(totalPrice)}</strong>
+                            <span class="price-breakdown">+ ₱${formatNumber(deliveryFee)} delivery</span>
+                        </div>
                     </div>
                  </td>`;
             }
@@ -682,7 +958,6 @@
     }
     
     async function makeEditable(cell, unitId, rateType, locationKey, durationKey, currentBaseRate) {
-        // Get role directly from session instead of using cached variable
         let role = null;
         try {
             const response = await apiRequest('/api/v1/auth/session/check');
@@ -734,15 +1009,19 @@
                     throw new Error(error.error || 'Failed to save rate');
                 }
                 
-                if (!currentData.rates[unitId]) currentData.rates[unitId] = {};
-                if (!currentData.rates[unitId][rateType]) currentData.rates[unitId][rateType] = {};
-                if (!currentData.rates[unitId][rateType][locationKey]) currentData.rates[unitId][rateType][locationKey] = {};
-                currentData.rates[unitId][rateType][locationKey][durationKey] = newBaseRate;
+                // Update local data
+                if (!currentData.prices[unitId]) currentData.prices[unitId] = {};
+                if (!currentData.prices[unitId][rateType]) currentData.prices[unitId][rateType] = {};
+                if (!currentData.prices[unitId][rateType][locationKey]) currentData.prices[unitId][rateType][locationKey] = {};
+                currentData.prices[unitId][rateType][locationKey][durationKey] = newBaseRate;
+                
+                // If discount is active, the backend will handle updating discountedPrices
+                // Just refresh the table data
+                await loadRateTableData();
                 
                 cell.setAttribute('data-current-rate', newBaseRate);
                 
                 showNotification('Rate saved successfully', 'success');
-                renderRateTable();
             } catch (error) {
                 console.error('Save error:', error);
                 showNotification(error.message, 'error');
@@ -776,7 +1055,6 @@
         
         pickupSelect.addEventListener('change', (e) => {
             currentPickupLocation = e.target.value;
-            console.log('Pickup location changed to:', currentPickupLocation);
             
             if (currentPickupLocation) {
                 updateDropoffSelect();
@@ -793,7 +1071,6 @@
         
         dropoffSelect.addEventListener('change', (e) => {
             currentDropoffLocation = e.target.value;
-            console.log('Dropoff location changed to:', currentDropoffLocation);
             currentPage = 1;
             renderRateTable();
         });
@@ -833,14 +1110,17 @@
         document.getElementById('prevPageBtn')?.addEventListener('click', goToPrevPage);
         document.getElementById('nextPageBtn')?.addEventListener('click', goToNextPage);
         
-        // Add click delegation for editable cells
+        document.getElementById('editDiscountBtn')?.addEventListener('click', () => openDiscountModal());
+        document.getElementById('closeDiscountModal')?.addEventListener('click', () => closeDiscountModal());
+        document.getElementById('cancelDiscountBtn')?.addEventListener('click', () => closeDiscountModal());
+        document.getElementById('discountForm')?.addEventListener('submit', saveGlobalDiscount);
+        
         const tableBodyElement = document.getElementById('tableBody');
         if (tableBodyElement) {
             tableBodyElement.addEventListener('click', function(e) {
                 const cell = e.target.closest('.rate-price');
                 if (!cell) return;
                 
-                // Check if we're already editing
                 if (cell.querySelector('input')) return;
                 
                 const unitId = cell.getAttribute('data-unit-id');
@@ -903,10 +1183,11 @@
         deleteLocation: deleteLocation,
         toggleDuration: toggleDuration,
         deleteDuration: deleteDuration,
-        makeEditable: makeEditable
+        makeEditable: makeEditable,
+        openDiscountModal: openDiscountModal,
+        removeGlobalDiscount: removeGlobalDiscount
     };
     
-    // For backward compatibility with existing onclick handlers
     window.toggleLocation = toggleLocation;
     window.deleteLocation = deleteLocation;
     window.editLocation = editLocation;

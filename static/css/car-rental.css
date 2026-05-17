@@ -63,6 +63,11 @@
     padding: 1.5rem;
     margin-bottom: 1.5rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .card-header {
@@ -79,12 +84,36 @@
     font-size: 1.3rem;
     font-weight: 600;
     color: #1E293B;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-title i {
+    color: #4F46E5;
+    font-size: 1.2rem;
 }
 
 .card-footer {
     margin-top: 1rem;
     padding-top: 0.75rem;
     border-top: 1px solid #E2E8F0;
+    background: #f8fafc;
+    border-radius: 0 0 28px 28px;
+    margin: 1rem -1.5rem -1.5rem;
+    padding: 1rem 1.5rem;
+}
+
+.card-footer .text-muted {
+    color: #64748B;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-footer .text-muted i {
+    color: #f59e0b;
 }
 
 .btn {
@@ -129,10 +158,42 @@
     border-radius: 6px;
     cursor: pointer;
     color: #64748B;
+    transition: all 0.2s;
 }
 
 .btn-icon-sm:hover {
     background: #E2E8F0;
+    transform: translateY(-1px);
+}
+
+.btn-icon-sm.btn-danger {
+    background-color: #ef4444;
+    color: white;
+}
+
+.btn-icon-sm.btn-danger:hover {
+    background-color: #dc2626;
+    transform: translateY(-1px);
+}
+
+.btn-icon-sm.btn-warning {
+    background-color: #f59e0b;
+    color: white;
+}
+
+.btn-icon-sm.btn-warning:hover {
+    background-color: #d97706;
+}
+
+.btn-danger {
+    background: #DC2626;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #B91C1C;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(220, 38, 38, 0.3);
 }
 
 .locations-container,
@@ -152,6 +213,13 @@
     align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
+    transition: all 0.2s;
+}
+
+.location-card:hover,
+.duration-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .location-name,
@@ -175,6 +243,7 @@
     font-size: 0.6rem;
     padding: 0.15rem 0.5rem;
     border-radius: 20px;
+    font-weight: 600;
 }
 
 .location-status.active,
@@ -235,11 +304,13 @@
     background-size: 1.2rem;
     appearance: none;
     min-width: 220px;
+    transition: all 0.2s;
 }
 
 .filter-select:focus {
     outline: none;
     border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 /* Table Container with Horizontal Scroll */
@@ -358,11 +429,13 @@
     font-size: 0.85rem;
     text-align: center;
     font-weight: 600;
+    transition: all 0.2s;
 }
 
 .price-input:focus {
     outline: none;
     border-color: #4338CA;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 /* Unit name and details styling */
@@ -378,7 +451,456 @@
     margin-top: 0.25rem;
 }
 
-/* Compact view for smaller screens */
+/* ============================================
+   DISCOUNT CONTAINER - RESTYLED
+   ============================================ */
+
+.discount-container {
+    padding: 0.5rem;
+    min-height: 150px;
+}
+
+.discount-info {
+    background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+    border-radius: 20px;
+    padding: 1.25rem;
+    border: 1px solid #f59e0b;
+    position: relative;
+    overflow: hidden;
+    animation: discountPulse 0.5s ease;
+    transition: all 0.3s ease;
+}
+
+.discount-info:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.15);
+}
+
+.discount-info::before {
+    content: '🎉';
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    font-size: 80px;
+    opacity: 0.1;
+    pointer-events: none;
+    transform: rotate(15deg);
+}
+
+.discount-info::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(245, 158, 11, 0.08) 0px,
+        rgba(245, 158, 11, 0.08) 10px,
+        transparent 10px,
+        transparent 20px
+    );
+    pointer-events: none;
+}
+
+.discount-info-item {
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.discount-label {
+    font-weight: 700;
+    color: #92400e;
+    font-size: 0.875rem;
+    min-width: 120px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.discount-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    padding: 0.25rem 1rem;
+    border-radius: 40px;
+    display: inline-block;
+    letter-spacing: -0.5px;
+    animation: discountPulse 0.5s ease;
+}
+
+.discount-value.percentage {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    color: white;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.discount-value.fixed {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.discount-description {
+    color: #78350f;
+    font-size: 0.875rem;
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+}
+
+.discount-validity {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #92400e;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px dashed #f59e0b;
+}
+
+.discount-validity i {
+    color: #f59e0b;
+    font-size: 1rem;
+}
+
+.discount-validity span {
+    font-weight: 600;
+}
+
+.discount-validity span[style*="color: #ef4444"] {
+    background-color: #fee2e2;
+    padding: 0.125rem 0.5rem;
+    border-radius: 20px;
+    margin-left: 0.5rem;
+    font-size: 0.75rem;
+}
+
+.discount-date {
+    color: #78350f;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.discount-date i {
+    color: #f59e0b;
+}
+
+.discount-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.no-discount {
+    text-align: center;
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 20px;
+    border: 2px dashed #cbd5e1;
+    transition: all 0.3s ease;
+}
+
+.no-discount:hover {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+}
+
+.no-discount i {
+    color: #94a3b8;
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.no-discount:hover i {
+    color: #f59e0b;
+    transform: scale(1.1);
+}
+
+.no-discount p {
+    color: #64748b;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.no-discount small {
+    color: #94a3b8;
+    font-size: 0.75rem;
+}
+
+/* ============================================
+   PRICE TABLE DISCOUNT STYLES - RESTYLED
+   ============================================ */
+
+.price-cell.has-discount {
+    background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+    position: relative;
+}
+
+.price-cell.has-discount::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(245, 158, 11, 0.05) 0px,
+        rgba(245, 158, 11, 0.05) 20px,
+        transparent 20px,
+        transparent 40px
+    );
+    pointer-events: none;
+}
+
+.price-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.original-price {
+    text-decoration: line-through;
+    color: #94a3b8;
+    font-size: 0.7rem;
+    display: block;
+    position: relative;
+}
+
+.discounted-price {
+    color: #dc2626;
+    font-weight: 800;
+    font-size: 1.1rem;
+    display: block;
+    animation: discountPulse 0.3s ease;
+    position: relative;
+}
+
+.discounted-price::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -4px;
+    right: -4px;
+    bottom: -2px;
+    background: rgba(220, 38, 38, 0.1);
+    border-radius: 8px;
+    z-index: -1;
+}
+
+.discount-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+    position: relative;
+    cursor: help;
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
+    transition: all 0.2s ease;
+}
+
+.discount-indicator:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
+}
+
+.discount-indicator i {
+    font-size: 0.5rem;
+}
+
+.discount-indicator:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #1e293b;
+    color: white;
+    font-size: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    white-space: nowrap;
+    z-index: 1000;
+    margin-bottom: 8px;
+    pointer-events: none;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.discount-indicator:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1e293b;
+    margin-bottom: -4px;
+    pointer-events: none;
+}
+
+.total-price-info {
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid #e2e8f0;
+    font-size: 0.75rem;
+}
+
+.total-price-info strong {
+    color: #1e293b;
+    font-size: 0.875rem;
+}
+
+.price-breakdown {
+    color: #64748b;
+    font-size: 0.625rem;
+    margin-left: 0.25rem;
+}
+
+/* ============================================
+   DISCOUNT MODAL - RESTYLED
+   ============================================ */
+
+#discountForm .form-group {
+    margin-bottom: 1.25rem;
+}
+
+#discountForm .form-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+#discountForm .form-label i {
+    color: #f59e0b;
+    font-size: 1rem;
+}
+
+#discountForm .form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+#discountForm .form-input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+#discountForm .form-input[type="checkbox"] {
+    width: auto;
+    margin-right: 0.5rem;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+#discountForm small {
+    display: block;
+    margin-top: 0.25rem;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+#discountForm .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+    padding: 0.5rem;
+    background: #f8fafc;
+    border-radius: 12px;
+}
+
+/* ============================================
+   LOADING STATE
+   ============================================ */
+
+.discount-container .loading-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem;
+    color: #94a3b8;
+    font-size: 0.875rem;
+}
+
+.discount-container .loading-placeholder::before {
+    content: '';
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #f59e0b;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes discountPulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.02);
+        opacity: 0.95;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   COMPACT VIEW FOR SMALLER SCREENS
+   ============================================ */
+
 @media (max-width: 768px) {
     .rate-table th:first-child,
     .rate-table td:first-child {
@@ -409,6 +931,39 @@
     .price-breakdown {
         font-size: 0.6rem;
     }
+    
+    .discount-info-item {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .discount-label {
+        min-width: auto;
+    }
+    
+    .discount-value {
+        font-size: 1.25rem;
+        padding: 0.125rem 0.75rem;
+    }
+    
+    .discount-actions {
+        flex-wrap: wrap;
+    }
+    
+    .price-container {
+        flex-direction: column;
+    }
+    
+    .discount-indicator {
+        display: inline-block;
+        margin-left: 0;
+        margin-top: 0.25rem;
+        text-align: center;
+    }
+    
+    .total-price-info {
+        font-size: 0.625rem;
+    }
 }
 
 /* Pagination */
@@ -438,6 +993,7 @@
     background: #4F46E5;
     color: white;
     border-color: #4F46E5;
+    transform: translateY(-1px);
 }
 
 .pagination-btn:disabled {
@@ -457,12 +1013,18 @@
 }
 
 .info-box {
-    background: #F0FDF4;
-    border-radius: 12px;
+    background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+    border-radius: 16px;
     padding: 1rem;
     font-size: 0.85rem;
     color: #166534;
     border-left: 4px solid #22C55E;
+    transition: all 0.3s ease;
+}
+
+.info-box:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
 }
 
 .info-box i {
@@ -507,6 +1069,12 @@
     align-items: center;
     justify-content: center;
     z-index: 2000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .modal {
@@ -519,6 +1087,7 @@
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     max-height: 90vh;
     overflow-y: auto;
+    animation: slideInUp 0.3s ease;
 }
 
 .modal-header {
@@ -535,6 +1104,13 @@
     font-weight: 700;
     color: #1E293B;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-header h3 i {
+    color: #f59e0b;
 }
 
 .modal-close {
@@ -549,11 +1125,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s;
 }
 
 .modal-close:hover {
     background: #FEE2E2;
     color: #DC2626;
+    transform: rotate(90deg);
 }
 
 .form-group {
@@ -581,6 +1159,7 @@
 .form-input:focus {
     outline: none;
     border-color: #4F46E5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 .modal-buttons {
@@ -611,6 +1190,13 @@
     z-index: 10000;
     animation: slideIn 0.3s ease;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.notification i {
+    font-size: 1rem;
 }
 
 .notification-success { background: #10B981; color: white; }
@@ -673,12 +1259,13 @@
 
 .rental-content.active {
     display: block;
+    animation: slideInUp 0.3s ease;
 }
 
-/* Rate Type Switch for With Driver */
+/* Rate Type Switch */
 .rate-type-switch {
-    display: flex;
-    gap: 1rem;
+    display: inline-flex;
+    gap: 0.25rem;
     background: #F1F5F9;
     border-radius: 40px;
     padding: 0.25rem;
@@ -694,6 +1281,7 @@
     border: none;
     background: transparent;
     color: #64748B;
+    font-family: inherit;
 }
 
 .rate-type-btn.active {
@@ -706,60 +1294,7 @@
     background: #E2E8F0;
 }
 
-/* Rate Type Switch - For With Driver */
-.rate-type-switch {
-    display: flex;
-    gap: 0.25rem;
-    background: #F1F5F9;
-    border-radius: 40px;
-    padding: 0.25rem;
-}
-
-.rate-type-btn {
-    padding: 0.5rem 1.2rem;
-    border-radius: 40px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: none;
-    background: transparent;
-    color: #64748B;
-}
-
-.rate-type-btn.active {
-    background: #4F46E5;
-    color: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.rate-type-btn:hover:not(.active) {
-    background: #E2E8F0;
-}
-
-.btn-danger {
-    background: #DC2626;
-    color: white;
-}
-
-.btn-danger:hover {
-    background: #B91C1C;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 14px rgba(220, 38, 38, 0.3);
-}
-
-/* Danger button for delete confirmation */
-.btn-danger {
-    background: #DC2626;
-    color: white;
-}
-
-.btn-danger:hover {
-    background: #B91C1C;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 14px rgba(220, 38, 38, 0.3);
-}
-
+/* Service Type Toggle */
 .service-type-toggle-container {
     padding: 1rem;
     text-align: center;
@@ -802,7 +1337,7 @@
     font-size: 0.875rem;
 }
 
-/* Package Type Switch (One Way / Round Trip / Tour) */
+/* Package Type Switch */
 .package-type-switch {
     display: inline-flex;
     gap: 0;
@@ -834,72 +1369,9 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Rate Type Switch (Regular / All-in) - For both Metro and Provincial */
-.rate-type-switch {
-    display: inline-flex;
-    gap: 0;
-    background: #F1F5F9;
-    border-radius: 2rem;
-    padding: 0.25rem;
-}
-
-.rate-type-btn {
-    padding: 0.5rem 1.5rem;
-    border: none;
-    background: transparent;
-    border-radius: 2rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    color: #64748B;
-    font-family: inherit;
-}
-
-.rate-type-btn.active {
-    background: #4F46E5;
-    color: white;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.rate-type-btn:hover:not(.active) {
-    background: #E2E8F0;
-}
-
-/* Rate Type Switch for Provincial */
-#provincialCardWD .rate-type-switch {
-    display: inline-flex;
-    gap: 0.25rem;
-    background: #F1F5F9;
-    border-radius: 40px;
-    padding: 0.25rem;
-}
-
-#provincialCardWD .rate-type-btn {
-    padding: 0.5rem 1.2rem;
-    border-radius: 40px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: none;
-    background: transparent;
-    color: #64748B;
-}
-
-#provincialCardWD .rate-type-btn.active {
-    background: #4F46E5;
-    color: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-#provincialCardWD .rate-type-btn:hover:not(.active) {
-    background: #E2E8F0;
-}
-
 /* Destination Card Styles */
 .destination-card {
-    background: #F8FAFC;
+    background: linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 100%);
     border: 1px solid #E2E8F0;
     border-radius: 12px;
     padding: 0.75rem 1rem;
@@ -908,6 +1380,13 @@
     justify-content: space-between;
     gap: 0.75rem;
     flex-wrap: wrap;
+    transition: all 0.2s ease;
+}
+
+.destination-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
 }
 
 .destination-name {
@@ -943,6 +1422,7 @@
     font-size: 0.6rem;
     padding: 0.15rem 0.5rem;
     border-radius: 20px;
+    font-weight: 600;
 }
 
 .destination-status.active,
