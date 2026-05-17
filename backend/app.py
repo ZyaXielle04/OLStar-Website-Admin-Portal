@@ -2,8 +2,8 @@ import os
 import sys
 import json
 import secrets
-from datetime import datetime, timezone, timedelta
-from flask import Flask, request, jsonify, session, g
+from datetime import timedelta
+from flask import Flask, request, jsonify, session
 from dotenv import load_dotenv
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
@@ -13,6 +13,9 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 from cloudinary.utils import cloudinary_url
+
+# Import timezone functions from utils
+from utils.timezone import get_ph_time, parse_ph_datetime, format_ph_datetime, get_ph_timezone_str
 
 # -----------------------
 # Add paths to Python path
@@ -36,41 +39,8 @@ load_dotenv()
 FLASK_ENV = os.getenv("FLASK_ENV", "development")
 
 # -----------------------
-# Global Timezone Configuration (Philippines UTC+8)
+# Create Flask app
 # -----------------------
-PH_TIMEZONE = timezone(timedelta(hours=8))
-
-def get_ph_time():
-    """Get current Philippine time"""
-    return datetime.now(PH_TIMEZONE)
-
-def get_ph_time_from_utc(utc_datetime):
-    """Convert UTC datetime to Philippine time"""
-    if utc_datetime is None:
-        return None
-    if utc_datetime.tzinfo is None:
-        utc_datetime = utc_datetime.replace(tzinfo=timezone.utc)
-    return utc_datetime.astimezone(PH_TIMEZONE)
-
-def parse_ph_datetime(date_string):
-    """Parse datetime string and convert to Philippine timezone"""
-    if not date_string:
-        return None
-    
-    try:
-        if 'Z' in date_string or '+' in date_string:
-            dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
-        else:
-            dt = datetime.fromisoformat(date_string)
-        
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        
-        return dt.astimezone(PH_TIMEZONE)
-    except:
-        return None
-
-# Make timezone functions available globally
 app = Flask(
     __name__,
     template_folder=os.path.join(ROOT_DIR, "templates"),
@@ -82,8 +52,8 @@ app = Flask(
 def inject_timezone():
     return {
         'get_ph_time': get_ph_time,
-        'format_ph_time': lambda dt: dt.astimezone(PH_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S') if dt else '',
-        'PH_TIMEZONE_STR': 'Asia/Manila (UTC+8)'
+        'format_ph_datetime': format_ph_datetime,
+        'get_ph_timezone_str': get_ph_timezone_str
     }
 
 # -----------------------
@@ -113,6 +83,53 @@ app.config.update(
 csrf = CSRFProtect(app)
 
 # -----------------------
+# CSRF Protection Middleware
+# -----------------------
+@app.before_request
+def check_csrf():
+    """Check CSRF token for state-changing methods"""
+    if request.method not in ['POST', 'PUT', 'DELETE', 'PATCH']:
+        return
+    
+    if request.endpoint in ['health', 'test']:
+        return
+    
+    if request.endpoint and request.endpoint.startswith('static'):
+        return
+    
+    if request.headers.get('X-API-Key'):
+        return
+    
+    token = request.headers.get('X-CSRFToken') or request.cookies.get('XSRF-TOKEN')
+    
+    if not token:
+        return jsonify({'error': 'CSRF token missing'}), 400
+    
+    session_token = session.get('_csrf_token')
+    if not session_token or token != session_token:
+        return jsonify({'error': 'CSRF token invalid'}), 400
+
+@app.after_request
+def set_csrf_cookie(response):
+    """Set CSRF token cookie for the frontend"""
+    try:
+        if '_csrf_token' not in session:
+            session['_csrf_token'] = secrets.token_hex(32)
+        
+        response.set_cookie(
+            "XSRF-TOKEN",
+            session['_csrf_token'],
+            secure=(FLASK_ENV == "production"),
+            samesite="Lax",
+            httponly=False
+        )
+    except Exception as e:
+        print(f"Warning: Could not set CSRF cookie: {e}")
+        pass
+    
+    return response
+
+# -----------------------
 # Rate Limiter Configuration
 # -----------------------
 DEFAULT_LIMITS = ["100 per day", "30 per hour"]
@@ -140,51 +157,6 @@ def exempt_from_rate_limiting():
             print(f"✓ Rate limit EXEMPT for: {endpoint}")
             return True
     return False
-
-# -----------------------
-# CSRF Protection Middleware
-# -----------------------
-@app.before_request
-def check_csrf():
-    if request.method not in ['POST', 'PUT', 'DELETE', 'PATCH']:
-        return
-    
-    if request.endpoint in ['health', 'test']:
-        return
-    
-    if request.endpoint and request.endpoint.startswith('static'):
-        return
-    
-    if request.headers.get('X-API-Key'):
-        return
-    
-    token = request.headers.get('X-CSRFToken') or request.cookies.get('XSRF-TOKEN')
-    
-    if not token:
-        return jsonify({'error': 'CSRF token missing'}), 400
-    
-    session_token = session.get('_csrf_token')
-    if not session_token or token != session_token:
-        return jsonify({'error': 'CSRF token invalid'}), 400
-
-@app.after_request
-def set_csrf_cookie(response):
-    try:
-        if '_csrf_token' not in session:
-            session['_csrf_token'] = secrets.token_hex(32)
-        
-        response.set_cookie(
-            "XSRF-TOKEN",
-            session['_csrf_token'],
-            secure=(FLASK_ENV == "production"),
-            samesite="Lax",
-            httponly=False
-        )
-    except Exception as e:
-        print(f"Warning: Could not set CSRF cookie: {e}")
-        pass
-    
-    return response
 
 # -----------------------
 # Cloudinary configuration
@@ -277,7 +249,11 @@ app.register_blueprint(api_bp)
 # -----------------------
 @app.route("/health")
 def health():
-    return {"status": "ok", "timezone": "Asia/Manila (UTC+8)", "current_time": get_ph_time().isoformat()}, 200
+    return {
+        "status": "ok",
+        "timezone": get_ph_timezone_str(),
+        "current_time": get_ph_time().isoformat()
+    }, 200
 
 @app.route("/test")
 def test():
@@ -336,7 +312,7 @@ def print_routes():
 if __name__ == "__main__":
     print_routes()
     print(f"Starting Flask server in {FLASK_ENV} mode")
-    print(f"Timezone: Asia/Manila (UTC+8)")
+    print(f"Timezone: {get_ph_timezone_str()}")
     print(f"Current PH Time: {get_ph_time().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Access your app at: http://localhost:5000")
     print(f"Login page: http://localhost:5000/login")
