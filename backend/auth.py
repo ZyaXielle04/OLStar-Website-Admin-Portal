@@ -1,15 +1,11 @@
 import os
 import requests
 from flask import Blueprint, request, jsonify, session, current_app
-from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from firebase_admin import auth, db
 from functools import wraps
 
-# Initialize limiter for this blueprint
-limiter = Limiter(key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
-
-# Create blueprint
+# Create blueprint (NO local limiter instance here)
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/v1/auth')
 
 # Get Firebase Web API Key from environment
@@ -120,7 +116,6 @@ def role_required(allowed_roles):
 # ============================================
 
 @auth_bp.route('/login', methods=['POST'])
-@limiter.limit("5 per minute")
 def login():
     """Authenticate user with email and password"""
     try:
