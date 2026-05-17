@@ -2,8 +2,8 @@ import os
 import sys
 import json
 import secrets
-from datetime import timedelta
-from flask import Flask, request, jsonify, session
+from datetime import datetime, timezone, timedelta
+from flask import Flask, request, jsonify, session, g
 from dotenv import load_dotenv
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
@@ -17,11 +17,9 @@ from cloudinary.utils import cloudinary_url
 # -----------------------
 # Add paths to Python path
 # -----------------------
-# Get the absolute path of the root directory (parent of /backend)
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Add both to Python path
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 if BACKEND_DIR not in sys.path:
@@ -38,13 +36,55 @@ load_dotenv()
 FLASK_ENV = os.getenv("FLASK_ENV", "development")
 
 # -----------------------
-# Create Flask app
+# Global Timezone Configuration (Philippines UTC+8)
 # -----------------------
+PH_TIMEZONE = timezone(timedelta(hours=8))
+
+def get_ph_time():
+    """Get current Philippine time"""
+    return datetime.now(PH_TIMEZONE)
+
+def get_ph_time_from_utc(utc_datetime):
+    """Convert UTC datetime to Philippine time"""
+    if utc_datetime is None:
+        return None
+    if utc_datetime.tzinfo is None:
+        utc_datetime = utc_datetime.replace(tzinfo=timezone.utc)
+    return utc_datetime.astimezone(PH_TIMEZONE)
+
+def parse_ph_datetime(date_string):
+    """Parse datetime string and convert to Philippine timezone"""
+    if not date_string:
+        return None
+    
+    try:
+        if 'Z' in date_string or '+' in date_string:
+            dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        else:
+            dt = datetime.fromisoformat(date_string)
+        
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        
+        return dt.astimezone(PH_TIMEZONE)
+    except:
+        return None
+
+# Make timezone functions available globally
 app = Flask(
     __name__,
     template_folder=os.path.join(ROOT_DIR, "templates"),
     static_folder=os.path.join(ROOT_DIR, "static")
 )
+
+# Inject timezone functions into Jinja2 templates
+@app.context_processor
+def inject_timezone():
+    return {
+        'get_ph_time': get_ph_time,
+        'format_ph_time': lambda dt: dt.astimezone(PH_TIMEZONE).strftime('%Y-%m-%d %H:%M:%S') if dt else '',
+        'PH_TIMEZONE_STR': 'Asia/Manila (UTC+8)'
+    }
 
 # -----------------------
 # Secret key (REQUIRED)
@@ -67,7 +107,7 @@ app.config.update(
 # CSRF Configuration
 # -----------------------
 app.config.update(
-    WTF_CSRF_CHECK_DEFAULT=False,  # Disable CSRF globally for APIs
+    WTF_CSRF_CHECK_DEFAULT=False,
     WTF_CSRF_TIME_LIMIT=None
 )
 csrf = CSRFProtect(app)
@@ -75,33 +115,26 @@ csrf = CSRFProtect(app)
 # -----------------------
 # Rate Limiter Configuration
 # -----------------------
-# Default limits for all routes
 DEFAULT_LIMITS = ["100 per day", "30 per hour"]
 
 def get_remote_address_with_fallback():
-    """Get remote address with fallback for proxy setups"""
-    # Check for X-Forwarded-For header (for proxies/load balancers)
     forwarded = request.headers.get('X-Forwarded-For')
     if forwarded:
         return forwarded.split(',')[0].strip()
     return get_remote_address()
 
-# Initialize limiter - CORRECTED: pass key_func as first positional argument
 limiter = Limiter(
-    get_remote_address_with_fallback,  # This is the key_func (positional)
+    get_remote_address_with_fallback,
     app=app,
     default_limits=DEFAULT_LIMITS,
     storage_uri="memory://",
     strategy="fixed-window",
 )
 
-# Request filter to exempt routes with @no_rate_limit decorator
 @limiter.request_filter
 def exempt_from_rate_limiting():
-    """Check if the current endpoint should be exempt from rate limiting"""
     endpoint = request.endpoint
     if endpoint:
-        # Get the view function for this endpoint
         view_func = app.view_functions.get(endpoint)
         if view_func and hasattr(view_func, '_limiter_exempt'):
             print(f"✓ Rate limit EXEMPT for: {endpoint}")
@@ -113,40 +146,30 @@ def exempt_from_rate_limiting():
 # -----------------------
 @app.before_request
 def check_csrf():
-    """Check CSRF token for state-changing methods"""
-    # Skip CSRF check for safe methods
     if request.method not in ['POST', 'PUT', 'DELETE', 'PATCH']:
         return
     
-    # Skip for health check and test endpoints
     if request.endpoint in ['health', 'test']:
         return
     
-    # Skip for static files
     if request.endpoint and request.endpoint.startswith('static'):
         return
     
-    # Skip for API endpoints that use API keys (if you have mobile apps)
     if request.headers.get('X-API-Key'):
         return
     
-    # Get CSRF token from header or cookie
     token = request.headers.get('X-CSRFToken') or request.cookies.get('XSRF-TOKEN')
     
     if not token:
         return jsonify({'error': 'CSRF token missing'}), 400
     
-    # Get CSRF token from session
     session_token = session.get('_csrf_token')
     if not session_token or token != session_token:
         return jsonify({'error': 'CSRF token invalid'}), 400
 
 @app.after_request
 def set_csrf_cookie(response):
-    """Set CSRF token cookie for the frontend"""
-    # Only set if user is authenticated (has session)
     try:
-        # Generate CSRF token if it doesn't exist
         if '_csrf_token' not in session:
             session['_csrf_token'] = secrets.token_hex(32)
         
@@ -155,10 +178,9 @@ def set_csrf_cookie(response):
             session['_csrf_token'],
             secure=(FLASK_ENV == "production"),
             samesite="Lax",
-            httponly=False  # Must be false so JavaScript can read it
+            httponly=False
         )
     except Exception as e:
-        # If session is not accessible, just return response without setting cookie
         print(f"Warning: Could not set CSRF cookie: {e}")
         pass
     
@@ -174,9 +196,7 @@ cloudinary.config(
     secure=True
 )
 
-# Test Cloudinary connection (optional - remove if causing issues)
 try:
-    # Just check if config is set, don't call api
     print("✓ Cloudinary configured with cloud_name:", os.getenv("CLOUDINARY_CLOUD_NAME"))
     print("✓ Cloudinary API key set:", bool(os.getenv("CLOUDINARY_API_KEY")))
     print("✓ Cloudinary API secret set:", bool(os.getenv("CLOUDINARY_API_SECRET")))
@@ -188,24 +208,22 @@ except Exception as e:
 # Firebase Admin SDK initialization
 # -----------------------
 db_url = os.getenv("FIREBASE_DATABASE_URL")
-firebase_json_env = os.getenv("FIREBASE_ADMIN_JSON")  # production
-firebase_file_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")  # local dev
+firebase_json_env = os.getenv("FIREBASE_ADMIN_JSON")
+firebase_file_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 
 if not db_url:
     raise RuntimeError("FIREBASE_DATABASE_URL must be set")
 
-if not _apps:  # Initialize only if Firebase not already initialized
+if not _apps:
     if FLASK_ENV == "production":
         if not firebase_json_env:
             raise RuntimeError("FIREBASE_ADMIN_JSON must be set in production")
-        # Load JSON directly from environment variable
         try:
             cred_dict = json.loads(firebase_json_env)
             cred = credentials.Certificate(cred_dict)
         except Exception as e:
             raise RuntimeError(f"Failed to load Firebase JSON from env: {e}")
     else:
-        # Local dev: load from JSON file
         if not firebase_file_env or not os.path.isfile(firebase_file_env):
             raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS must be a valid file path")
         cred = credentials.Certificate(firebase_file_env)
@@ -229,17 +247,11 @@ except ModuleNotFoundError as e:
     print(f"✗ Failed to import pages blueprint: {e}")
     raise RuntimeError("pages.py not found in /routes")
 
-# -----------------------
-# Import API Blueprint from new folder structure
-# -----------------------
 try:
     from routes.api import api_bp
     print("✓ API blueprint imported successfully")
 except ModuleNotFoundError as e:
     print(f"✗ Failed to import API blueprint: {e}")
-    print(f"  Looking for: {ROOT_DIR}/routes/api/__init__.py")
-    
-    # Debug: Check if the folder exists
     routes_api_path = os.path.join(ROOT_DIR, "routes", "api")
     if os.path.exists(routes_api_path):
         print(f"  ✓ Folder exists: {routes_api_path}")
@@ -265,11 +277,8 @@ app.register_blueprint(api_bp)
 # -----------------------
 @app.route("/health")
 def health():
-    return {"status": "ok"}, 200
+    return {"status": "ok", "timezone": "Asia/Manila (UTC+8)", "current_time": get_ph_time().isoformat()}, 200
 
-# -----------------------
-# Debug route to test if Flask is working
-# -----------------------
 @app.route("/test")
 def test():
     return {"message": "Flask is working!"}, 200
@@ -285,12 +294,8 @@ def not_found(e):
 def server_error(e):
     return "500 - Internal Server Error", 500
 
-# -----------------------
-# Rate limit exceeded handler
-# -----------------------
 @app.errorhandler(429)
 def ratelimit_handler(e):
-    """Handle rate limit exceeded errors"""
     return jsonify({
         'error': 'Rate limit exceeded',
         'message': 'Too many requests. Please try again later.',
@@ -306,12 +311,10 @@ def print_routes():
     print("="*60)
     routes_found = False
     
-    # Group routes by blueprint
     for rule in app.url_map.iter_rules():
         routes_found = True
         endpoint = rule.endpoint
         
-        # Determine route category
         if endpoint.startswith('auth'):
             category = "🔐 AUTH"
         elif endpoint.startswith('pages'):
@@ -333,6 +336,8 @@ def print_routes():
 if __name__ == "__main__":
     print_routes()
     print(f"Starting Flask server in {FLASK_ENV} mode")
+    print(f"Timezone: Asia/Manila (UTC+8)")
+    print(f"Current PH Time: {get_ph_time().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Access your app at: http://localhost:5000")
     print(f"Login page: http://localhost:5000/login")
     print(f"Test endpoint: http://localhost:5000/test")
