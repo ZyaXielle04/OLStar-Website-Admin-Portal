@@ -73,6 +73,42 @@ app.config.update(
 csrf = CSRFProtect(app)
 
 # -----------------------
+# Rate Limiter Configuration
+# -----------------------
+# Default limits for all routes
+DEFAULT_LIMITS = ["100 per day", "30 per hour"]
+
+def get_remote_address_with_fallback():
+    """Get remote address with fallback for proxy setups"""
+    # Check for X-Forwarded-For header (for proxies/load balancers)
+    forwarded = request.headers.get('X-Forwarded-For')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return get_remote_address()
+
+# Initialize limiter - CORRECTED: pass key_func as first positional argument
+limiter = Limiter(
+    get_remote_address_with_fallback,  # This is the key_func (positional)
+    app=app,
+    default_limits=DEFAULT_LIMITS,
+    storage_uri="memory://",
+    strategy="fixed-window",
+)
+
+# Request filter to exempt routes with @no_rate_limit decorator
+@limiter.request_filter
+def exempt_from_rate_limiting():
+    """Check if the current endpoint should be exempt from rate limiting"""
+    endpoint = request.endpoint
+    if endpoint:
+        # Get the view function for this endpoint
+        view_func = app.view_functions.get(endpoint)
+        if view_func and hasattr(view_func, '_limiter_exempt'):
+            print(f"✓ Rate limit EXEMPT for: {endpoint}")
+            return True
+    return False
+
+# -----------------------
 # CSRF Protection Middleware
 # -----------------------
 @app.before_request
@@ -180,7 +216,7 @@ if not _apps:  # Initialize only if Firebase not already initialized
 # Import Blueprints
 # -----------------------
 try:
-    from backend.auth import auth_bp, limiter as auth_limiter
+    from backend.auth import auth_bp
     print("✓ Auth blueprint imported successfully")
 except ModuleNotFoundError as e:
     print(f"✗ Failed to import auth blueprint: {e}")
@@ -218,11 +254,6 @@ except ModuleNotFoundError as e:
     raise RuntimeError("API blueprint not found in /routes/api")
 
 # -----------------------
-# Initialize Flask-Limiter for auth
-# -----------------------
-auth_limiter.init_app(app)
-
-# -----------------------
 # Register Blueprints
 # -----------------------
 app.register_blueprint(auth_bp)
@@ -253,6 +284,18 @@ def not_found(e):
 @app.errorhandler(500)
 def server_error(e):
     return "500 - Internal Server Error", 500
+
+# -----------------------
+# Rate limit exceeded handler
+# -----------------------
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Handle rate limit exceeded errors"""
+    return jsonify({
+        'error': 'Rate limit exceeded',
+        'message': 'Too many requests. Please try again later.',
+        'retry_after': e.description if hasattr(e, 'description') else 60
+    }), 429
 
 # -----------------------
 # Debug: Print all registered routes
