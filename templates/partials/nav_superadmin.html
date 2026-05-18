@@ -62,23 +62,38 @@
     </div>
 </details>
 
-<!-- Booking Details Dropdown -->
+<!-- Bookings Dropdown -->
 <details class="nav-group"
-         {% if request.path.startswith('/pending-bookings') or request.path.startswith('/booking-history') %}open{% endif %}>
+         {% if request.path.startswith('/bookings/') %}open{% endif %}>
     <summary>
         <i class="fas fa-calendar-alt"></i> Bookings
     </summary>
 
     <div class="nav-submenu">
 
-        <a href="/pending-bookings"
-           class="nav-sublink {% if request.path == '/pending-bookings' or request.path.startswith('/pending-bookings/') %}active{% endif %}">
-            <i class="fas fa-clock"></i> Pending Bookings
+        <a href="/bookings/unassigned"
+           class="nav-sublink {% if request.path == '/bookings/unassigned' or request.path.startswith('/bookings/unassigned/') %}active{% endif %}">
+            <i class="fas fa-user-clock"></i> Unassigned
         </a>
 
-        <a href="/booking-history"
-           class="nav-sublink {% if request.path == '/booking-history' or request.path.startswith('/booking-history/') %}active{% endif %}">
-            <i class="fas fa-history"></i> Booking History
+        <a href="/bookings/assigned"
+           class="nav-sublink {% if request.path == '/bookings/assigned' or request.path.startswith('/bookings/assigned/') %}active{% endif %}">
+            <i class="fas fa-user-check"></i> Assigned
+        </a>
+
+        <a href="/bookings/completed"
+           class="nav-sublink {% if request.path == '/bookings/completed' or request.path.startswith('/bookings/completed/') %}active{% endif %}">
+            <i class="fas fa-check-circle"></i> Completed
+        </a>
+
+        <a href="/bookings/cancelled"
+           class="nav-sublink {% if request.path == '/bookings/cancelled' or request.path.startswith('/bookings/cancelled/') %}active{% endif %}">
+            <i class="fas fa-times-circle"></i> Cancelled
+        </a>
+
+        <a href="/bookings/all"
+           class="nav-sublink {% if request.path == '/bookings/all' or request.path.startswith('/bookings/all/') %}active{% endif %}">
+            <i class="fas fa-list"></i> All
         </a>
 
     </div>

@@ -22,8 +22,10 @@ def role_required(allowed_roles):
         def decorated_function(*args, **kwargs):
             if 'role' not in session:
                 return redirect(url_for('pages.dashboard_redirect'))
+
             if session['role'] not in allowed_roles:
                 return redirect(url_for('pages.dashboard_redirect'))
+
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -37,12 +39,15 @@ def role_required(allowed_roles):
 def index():
     if 'user_id' in session:
         return redirect(url_for('pages.dashboard_redirect'))
+
     return redirect(url_for('pages.login_page'))
 
 
 @pages_bp.route('/login')
 def login_page():
+
     if 'user_id' in session:
+
         role = session.get('role', 'customer')
 
         if role == 'customer':
@@ -56,6 +61,7 @@ def login_page():
 @pages_bp.route('/dashboard')
 @login_required_page
 def dashboard_redirect():
+
     role = session.get('role', 'customer')
 
     if role == 'customer':
@@ -63,8 +69,8 @@ def dashboard_redirect():
 
     if role == 'superadmin':
         return redirect(url_for('pages.superadmin_dashboard'))
-    else:
-        return redirect(url_for('pages.admin_dashboard'))
+
+    return redirect(url_for('pages.admin_dashboard'))
 
 
 # ============================================
@@ -86,14 +92,13 @@ def admin_dashboard():
 
 
 # ============================================
-# USER MANAGEMENT (UPDATED STRUCTURE)
+# USER MANAGEMENT
 # ============================================
 
 @pages_bp.route('/users/admins')
 @login_required_page
 @role_required(['superadmin'])
 def users_admins_page():
-    """Admins list - Superadmin only"""
     return render_template(
         'users/admins.html',
         page_title="Admins",
@@ -106,7 +111,6 @@ def users_admins_page():
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def users_customers_page():
-    """Customers list - Admin + Superadmin"""
     return render_template(
         'users/customers.html',
         page_title="Customers",
@@ -119,7 +123,6 @@ def users_customers_page():
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def users_drivers_page():
-    """Drivers list - Admin + Superadmin"""
     return render_template(
         'users/drivers.html',
         page_title="Drivers",
@@ -139,7 +142,10 @@ def user_create_page():
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def user_edit_page(user_id):
-    return render_template('common/user_form.html', user_id=user_id)
+    return render_template(
+        'common/user_form.html',
+        user_id=user_id
+    )
 
 
 # ============================================
@@ -164,14 +170,20 @@ def transport_unit_create_page():
 @login_required_page
 @role_required(['superadmin'])
 def transport_unit_edit_page(unit_id):
-    return render_template('common/transport_unit_form.html', unit_id=unit_id)
+    return render_template(
+        'common/transport_unit_form.html',
+        unit_id=unit_id
+    )
 
 
 @pages_bp.route('/transport-units/<unit_id>/view')
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def transport_unit_view_page(unit_id):
-    return render_template('common/transport_unit_details.html', unit_id=unit_id)
+    return render_template(
+        'common/transport_unit_details.html',
+        unit_id=unit_id
+    )
 
 
 # ============================================
@@ -196,21 +208,30 @@ def package_create_page():
 @login_required_page
 @role_required(['superadmin'])
 def package_edit_page(package_id):
-    return render_template('common/package_form.html', package_id=package_id)
+    return render_template(
+        'common/package_form.html',
+        package_id=package_id
+    )
 
 
 @pages_bp.route('/packages/<package_id>/view')
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def package_view_page(package_id):
-    return render_template('common/package_details.html', package_id=package_id)
+    return render_template(
+        'common/package_details.html',
+        package_id=package_id
+    )
 
 
 @pages_bp.route('/packages/<package_id>/units')
 @login_required_page
 @role_required(['superadmin'])
 def package_units_page(package_id):
-    return render_template('common/package_units.html', package_id=package_id)
+    return render_template(
+        'common/package_units.html',
+        package_id=package_id
+    )
 
 
 # ============================================
@@ -249,29 +270,50 @@ def car_rental_with_driver_page():
 # BOOKINGS
 # ============================================
 
-@pages_bp.route('/pending-bookings')
+@pages_bp.route('/bookings/unassigned')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def pending_bookings_page():
-    return render_template('common/pending_bookings.html')
+def unassigned_bookings_page():
+    return render_template('bookings/unassigned.html')
 
 
-@pages_bp.route('/booking-history')
+@pages_bp.route('/bookings/assigned')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def booking_history_page():
-    return render_template('common/booking_history.html')
+def assigned_bookings_page():
+    return render_template('bookings/assigned.html')
+
+
+@pages_bp.route('/bookings/completed')
+@login_required_page
+@role_required(['superadmin', 'admin'])
+def completed_bookings_page():
+    return render_template('bookings/completed.html')
+
+
+@pages_bp.route('/bookings/cancelled')
+@login_required_page
+@role_required(['superadmin', 'admin'])
+def cancelled_bookings_page():
+    return render_template('bookings/cancelled.html')
+
+
+@pages_bp.route('/bookings/all')
+@login_required_page
+@role_required(['superadmin', 'admin'])
+def all_bookings_page():
+    return render_template('bookings/all.html')
 
 
 # ============================================
-# LEGACY REDIRECTS (SAFE CLEANUP)
+# LEGACY REDIRECTS
 # ============================================
 
 @pages_bp.route('/users')
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def legacy_users_redirect():
-    """Redirect old users page safely"""
+
     role = session.get('role')
 
     if role == 'superadmin':
@@ -295,7 +337,7 @@ def admin_users_redirect():
 
 
 # ============================================
-# KEEP YOUR OTHER REDIRECTS (UNCHANGED)
+# TRANSPORT UNIT REDIRECTS
 # ============================================
 
 @pages_bp.route('/superadmin/transport-units')
@@ -312,15 +354,19 @@ def admin_transport_units_redirect():
     return redirect(url_for('pages.transport_units_page'))
 
 
-@pages_bp.route('/superadmin/pending-bookings')
+# ============================================
+# BOOKINGS REDIRECTS
+# ============================================
+
+@pages_bp.route('/superadmin/bookings')
 @login_required_page
 @role_required(['superadmin'])
-def superadmin_pending_bookings_redirect():
-    return redirect(url_for('pages.pending_bookings_page'))
+def superadmin_bookings_redirect():
+    return redirect(url_for('pages.unassigned_bookings_page'))
 
 
-@pages_bp.route('/admin/pending-bookings')
+@pages_bp.route('/admin/bookings')
 @login_required_page
 @role_required(['admin', 'superadmin'])
-def admin_pending_bookings_redirect():
-    return redirect(url_for('pages.pending_bookings_page'))
+def admin_bookings_redirect():
+    return redirect(url_for('pages.unassigned_bookings_page'))
