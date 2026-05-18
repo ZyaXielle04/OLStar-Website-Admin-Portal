@@ -352,21 +352,3 @@ def superadmin_transport_units_redirect():
 @role_required(['admin', 'superadmin'])
 def admin_transport_units_redirect():
     return redirect(url_for('pages.transport_units_page'))
-
-
-# ============================================
-# BOOKINGS REDIRECTS
-# ============================================
-
-@pages_bp.route('/superadmin/bookings')
-@login_required_page
-@role_required(['superadmin'])
-def superadmin_bookings_redirect():
-    return redirect(url_for('pages.unassigned_bookings_page'))
-
-
-@pages_bp.route('/admin/bookings')
-@login_required_page
-@role_required(['admin', 'superadmin'])
-def admin_bookings_redirect():
-    return redirect(url_for('pages.unassigned_bookings_page'))
