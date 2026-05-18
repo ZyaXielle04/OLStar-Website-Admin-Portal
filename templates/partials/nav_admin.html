@@ -67,29 +67,39 @@
 
     <div class="nav-submenu">
 
-        <a href="/bookings/unassigned"
-           class="nav-sublink {% if request.path == '/bookings/unassigned' or request.path.startswith('/bookings/unassigned/') %}active{% endif %}">
-            <i class="fas fa-user-clock"></i> Unassigned
+        <!-- AIRPORT TRANSFER -->
+        <a href="/bookings/airport-transfer"
+           class="nav-sublink {% if request.path == '/bookings/airport-transfer' or request.path.startswith('/bookings/airport-transfer/') %}active{% endif %}">
+            <i class="fas fa-plane"></i>
+            Airport Transfer
         </a>
 
-        <a href="/bookings/assigned"
-           class="nav-sublink {% if request.path == '/bookings/assigned' or request.path.startswith('/bookings/assigned/') %}active{% endif %}">
-            <i class="fas fa-user-check"></i> Assigned
+        <!-- METRO MANILA TRANSFER -->
+        <a href="/bookings/metro-manila-transfer"
+           class="nav-sublink {% if request.path == '/bookings/metro-manila-transfer' or request.path.startswith('/bookings/metro-manila-transfer/') %}active{% endif %}">
+            <i class="fas fa-map-marker-alt"></i>
+            Metro Manila Transfer
         </a>
 
-        <a href="/bookings/completed"
-           class="nav-sublink {% if request.path == '/bookings/completed' or request.path.startswith('/bookings/completed/') %}active{% endif %}">
-            <i class="fas fa-check-circle"></i> Completed
+        <!-- SELF DRIVE -->
+        <a href="/bookings/car-rental/self-drive"
+           class="nav-sublink {% if request.path == '/bookings/car-rental/self-drive' or request.path.startswith('/bookings/car-rental/self-drive/') %}active{% endif %}">
+            <i class="fas fa-key"></i>
+            Car Rental (Self-Drive)
         </a>
 
-        <a href="/bookings/cancelled"
-           class="nav-sublink {% if request.path == '/bookings/cancelled' or request.path.startswith('/bookings/cancelled/') %}active{% endif %}">
-            <i class="fas fa-times-circle"></i> Cancelled
+        <!-- WITH DRIVER - METRO -->
+        <a href="/bookings/car-rental/with-driver/metro-manila"
+           class="nav-sublink {% if request.path == '/bookings/car-rental/with-driver/metro-manila' or request.path.startswith('/bookings/car-rental/with-driver/metro-manila/') %}active{% endif %}">
+            <i class="fas fa-user"></i>
+            With Driver (Metro Manila)
         </a>
 
-        <a href="/bookings/all"
-           class="nav-sublink {% if request.path == '/bookings/all' or request.path.startswith('/bookings/all/') %}active{% endif %}">
-            <i class="fas fa-list"></i> All
+        <!-- WITH DRIVER - PROVINCIAL -->
+        <a href="/bookings/car-rental/with-driver/provincial"
+           class="nav-sublink {% if request.path == '/bookings/car-rental/with-driver/provincial' or request.path.startswith('/bookings/car-rental/with-driver/provincial/') %}active{% endif %}">
+            <i class="fas fa-road"></i>
+            With Driver (Provincial)
         </a>
 
     </div>

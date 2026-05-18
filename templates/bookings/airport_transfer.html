@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% include "components/toast.html" %}
+{% include "components/confirm-modal.html" %}
+
+{% block title %}Airport Transfer Bookings | OLStar Portal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/bookings/airport_transfer.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{% endblock %}
+
+{% block sidebar_links %}
+{% if session.get('role') == 'superadmin' %}
+    {% include "partials/nav_superadmin.html" %}
+{% else %}
+    {% include "partials/nav_admin.html" %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+
+    <!-- PAGE HEADER -->
+    <div class="dashboard-header">
+        <h1>
+            <i class="fas fa-plane"></i> 
+            Airport Transfer Bookings
+        </h1>
+        <p>Manage airport transfer bookings across different statuses.</p>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon total">
+                <i class="fas fa-calendar-alt"></i>
+            </div>
+            <div class="stat-content">
+                <h3 id="totalBookings">0</h3>
+                <p>Total Bookings</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon today">
+                <i class="fas fa-calendar-day"></i>
+            </div>
+            <div class="stat-content">
+                <h3 id="todayBookings">0</h3>
+                <p>Today's Bookings</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon revenue">
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div class="stat-content">
+                <h3 id="totalRevenue">₱0</h3>
+                <p>Total Revenue</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- STATUS TABS -->
+    <div class="card">
+        <div class="status-tabs">
+            <button class="status-tab active" data-status="unassigned">
+                <i class="fas fa-clock"></i>
+                Unassigned
+                <span class="badge" id="unassignedCount">0</span>
+            </button>
+            <button class="status-tab" data-status="assigned">
+                <i class="fas fa-user-check"></i>
+                Assigned
+                <span class="badge" id="assignedCount">0</span>
+            </button>
+            <button class="status-tab" data-status="completed">
+                <i class="fas fa-check-circle"></i>
+                Completed
+                <span class="badge" id="completedCount">0</span>
+            </button>
+            <button class="status-tab" data-status="cancelled">
+                <i class="fas fa-times-circle"></i>
+                Cancelled
+                <span class="badge" id="cancelledCount">0</span>
+            </button>
+            <button class="status-tab" data-status="all">
+                <i class="fas fa-list"></i>
+                All Transfers
+                <span class="badge" id="allCount">0</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- SEARCH AND DATE FILTER -->
+    <div class="card filters-card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <i class="fas fa-search"></i>
+                Search & Filter
+            </h3>
+            <button class="btn btn-outline-primary" id="refreshBookingsBtn">
+                <i class="fas fa-sync-alt"></i>
+                Refresh
+            </button>
+        </div>
+
+        <div class="filters-row">
+            <div class="filter-group">
+                <div class="search-group">
+                    <i class="fas fa-search"></i>
+                    <input type="text"
+                        id="searchInput"
+                        class="form-input search-input"
+                        placeholder="Search by booking reference, customer name, contact number...">
+                </div>
+                <div class="date-filter-group">
+                    <label class="filter-label">
+                        <i class="fas fa-calendar"></i>
+                        Filter by Date:
+                    </label>
+                    <select id="dateFilter" class="form-select date-select">
+                        <option value="all">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="tomorrow">Tomorrow</option>
+                        <option value="this_week">This Week</option>
+                        <option value="next_week">Next Week</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOOKINGS CARDS -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title" id="tableTitle">
+                Unassigned Airport Transfers
+            </h3>
+            <div class="table-info">
+                <i class="fas fa-list-ul"></i>
+                <span id="resultsCount">0</span> results found
+            </div>
+        </div>
+
+        <div class="cards-container" id="bookingsCardsContainer">
+            <div class="loading-cards">
+                <i class="fas fa-spinner fa-spin"></i>
+                Loading bookings...
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- VIEW BOOKING MODAL -->
+<div id="viewBookingModal" class="modal-overlay" style="display: none;">
+    <div class="modal modal-large">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-info-circle"></i>
+                Booking Details
+            </h3>
+            <button class="modal-close" id="closeViewBookingModal">
+                &times;
+            </button>
+        </div>
+        <div class="modal-body" id="bookingDetailsContainer">
+            <!-- JS RENDER -->
+        </div>
+        <div class="modal-buttons">
+            <button type="button" class="btn btn-secondary" id="closeModalFooterBtn">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ASSIGN DRIVER MODAL -->
+<div id="assignDriverModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-user-check"></i>
+                Assign Driver
+            </h3>
+            <button class="modal-close" id="closeAssignDriverModal">
+                &times;
+            </button>
+        </div>
+        <form id="assignDriverForm">
+            <input type="hidden" id="selectedBookingId">
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-user"></i>
+                    Select Driver
+                </label>
+                <select id="driverSelect" class="form-select" required>
+                    <option value="">Choose Driver</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-truck"></i>
+                    Assign Vehicle
+                </label>
+                <select id="vehicleSelect" class="form-select" required>
+                    <option value="">Choose Vehicle</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-sticky-note"></i>
+                    Assignment Notes
+                </label>
+                <textarea id="assignmentNotes" class="form-textarea" rows="4" placeholder="Optional notes..."></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelAssignBtn">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-check"></i>
+                    Confirm Assignment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- CANCEL BOOKING MODAL -->
+<div id="cancelBookingModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-ban"></i>
+                Cancel Booking
+            </h3>
+            <button class="modal-close" id="closeCancelBookingModal">
+                &times;
+            </button>
+        </div>
+        <form id="cancelBookingForm">
+            <input type="hidden" id="cancelBookingId">
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-comment"></i>
+                    Cancellation Reason
+                </label>
+                <textarea id="cancelReason" class="form-textarea" rows="4" placeholder="Enter reason for cancellation..." required></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelBookingBtn">
+                    Close
+                </button>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-times"></i>
+                    Cancel Booking
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- COMPLETE BOOKING MODAL -->
+<div id="completeBookingModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-check-double"></i>
+                Complete Booking
+            </h3>
+            <button class="modal-close" id="closeCompleteBookingModal">
+                &times;
+            </button>
+        </div>
+        <form id="completeBookingForm">
+            <input type="hidden" id="completeBookingId">
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-sticky-note"></i>
+                    Completion Notes
+                </label>
+                <textarea id="completionNotes" class="form-textarea" rows="4" placeholder="Add completion notes (optional)..."></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelCompleteBtn">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-check-circle"></i>
+                    Mark as Complete
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/bookings/airport_transfer.js') }}"></script>
+{% endblock %}

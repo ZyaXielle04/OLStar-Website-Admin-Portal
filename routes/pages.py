@@ -10,16 +10,21 @@ pages_bp = Blueprint('pages', __name__)
 def login_required_page(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+
         if 'user_id' not in session:
             return redirect(url_for('pages.login_page'))
+
         return f(*args, **kwargs)
+
     return decorated_function
 
 
 def role_required(allowed_roles):
     def decorator(f):
+
         @wraps(f)
         def decorated_function(*args, **kwargs):
+
             if 'role' not in session:
                 return redirect(url_for('pages.dashboard_redirect'))
 
@@ -27,7 +32,9 @@ def role_required(allowed_roles):
                 return redirect(url_for('pages.dashboard_redirect'))
 
             return f(*args, **kwargs)
+
         return decorated_function
+
     return decorator
 
 
@@ -37,6 +44,7 @@ def role_required(allowed_roles):
 
 @pages_bp.route('/')
 def index():
+
     if 'user_id' in session:
         return redirect(url_for('pages.dashboard_redirect'))
 
@@ -52,6 +60,7 @@ def login_page():
 
         if role == 'customer':
             session.clear()
+
         else:
             return redirect(url_for('pages.dashboard_redirect'))
 
@@ -99,6 +108,7 @@ def admin_dashboard():
 @login_required_page
 @role_required(['superadmin'])
 def users_admins_page():
+
     return render_template(
         'users/admins.html',
         page_title="Admins",
@@ -111,6 +121,7 @@ def users_admins_page():
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def users_customers_page():
+
     return render_template(
         'users/customers.html',
         page_title="Customers",
@@ -123,6 +134,7 @@ def users_customers_page():
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def users_drivers_page():
+
     return render_template(
         'users/drivers.html',
         page_title="Drivers",
@@ -142,6 +154,7 @@ def user_create_page():
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def user_edit_page(user_id):
+
     return render_template(
         'common/user_form.html',
         user_id=user_id
@@ -170,6 +183,7 @@ def transport_unit_create_page():
 @login_required_page
 @role_required(['superadmin'])
 def transport_unit_edit_page(unit_id):
+
     return render_template(
         'common/transport_unit_form.html',
         unit_id=unit_id
@@ -180,6 +194,7 @@ def transport_unit_edit_page(unit_id):
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def transport_unit_view_page(unit_id):
+
     return render_template(
         'common/transport_unit_details.html',
         unit_id=unit_id
@@ -208,6 +223,7 @@ def package_create_page():
 @login_required_page
 @role_required(['superadmin'])
 def package_edit_page(package_id):
+
     return render_template(
         'common/package_form.html',
         package_id=package_id
@@ -218,6 +234,7 @@ def package_edit_page(package_id):
 @login_required_page
 @role_required(['superadmin', 'admin'])
 def package_view_page(package_id):
+
     return render_template(
         'common/package_details.html',
         package_id=package_id
@@ -228,6 +245,7 @@ def package_view_page(package_id):
 @login_required_page
 @role_required(['superadmin'])
 def package_units_page(package_id):
+
     return render_template(
         'common/package_units.html',
         package_id=package_id
@@ -270,39 +288,49 @@ def car_rental_with_driver_page():
 # BOOKINGS
 # ============================================
 
-@pages_bp.route('/bookings/unassigned')
+# AIRPORT TRANSFER
+
+@pages_bp.route('/bookings/airport-transfer')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def unassigned_bookings_page():
-    return render_template('bookings/unassigned.html')
+def airport_transfer_bookings_page():
+    return render_template('bookings/airport_transfer.html')
 
 
-@pages_bp.route('/bookings/assigned')
+# METRO MANILA TRANSFER
+
+@pages_bp.route('/bookings/metro-manila-transfer')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def assigned_bookings_page():
-    return render_template('bookings/assigned.html')
+def metro_manila_transfer_bookings_page():
+    return render_template('bookings/metro_manila_transfer.html')
 
 
-@pages_bp.route('/bookings/completed')
+# CAR RENTAL SELF DRIVE
+
+@pages_bp.route('/bookings/car-rental/self-drive')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def completed_bookings_page():
-    return render_template('bookings/completed.html')
+def self_drive_bookings_page():
+    return render_template('bookings/self_drive.html')
 
 
-@pages_bp.route('/bookings/cancelled')
+# WITH DRIVER - METRO MANILA
+
+@pages_bp.route('/bookings/car-rental/with-driver/metro-manila')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def cancelled_bookings_page():
-    return render_template('bookings/cancelled.html')
+def with_driver_metro_bookings_page():
+    return render_template('bookings/with_driver_metro.html')
 
 
-@pages_bp.route('/bookings/all')
+# WITH DRIVER - PROVINCIAL
+
+@pages_bp.route('/bookings/car-rental/with-driver/provincial')
 @login_required_page
 @role_required(['superadmin', 'admin'])
-def all_bookings_page():
-    return render_template('bookings/all.html')
+def with_driver_provincial_bookings_page():
+    return render_template('bookings/with_driver_provincial.html')
 
 
 # ============================================
