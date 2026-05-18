@@ -1,10 +1,9 @@
-// airport_transfer.js - Airport Transfer Booking Management
+// static/js/bookings/airport_transfer.js - Airport Transfer Booking Management
 
 // ============================================
 // CSRF TOKEN HELPER FUNCTIONS
 // ============================================
 
-// Helper function to get CSRF token from cookie
 function getCsrfToken() {
     const cookies = document.cookie.split(';');
     for (let cookie of cookies) {
@@ -16,7 +15,6 @@ function getCsrfToken() {
     return null;
 }
 
-// Helper function for API requests with CSRF token
 async function apiRequest(url, options = {}) {
     const method = options.method || 'GET';
     const csrfToken = getCsrfToken();
@@ -45,156 +43,234 @@ async function apiRequest(url, options = {}) {
 }
 
 // ============================================
-// FIREBASE REALTIME LISTENER SETUP
+// POLLING WITH CACHE & SCROLL PRESERVATION
 // ============================================
 
-let firebaseListener = null;
-let lastUpdateTime = null;
-let pendingRefresh = false;
+let pollingInterval = null;
+let isRefreshing = false;
+let lastScrollPosition = 0;
+let lastBookingIdsHash = '';
+let allBookings = [];
+let currentStatus = 'unassigned';
+let currentSearchTerm = '';
+let currentDateFilter = 'all';
 
-function setupFirebaseListener() {
-    // Check if Firebase is available
-    if (typeof firebase === 'undefined' || !firebase.database) {
-        console.warn('Firebase not available, falling back to manual refresh');
-        return;
+// Cache for bookings data
+let bookingsCache = {
+    data: null,
+    timestamp: null,
+    cacheDuration: 30000, // 30 seconds cache
+    isValid: function() {
+        return this.data && this.timestamp && (Date.now() - this.timestamp) < this.cacheDuration;
+    },
+    set: function(data) {
+        this.data = data;
+        this.timestamp = Date.now();
+    },
+    get: function() {
+        return this.data;
+    },
+    clear: function() {
+        this.data = null;
+        this.timestamp = null;
+    }
+};
+
+// Save current scroll position
+function saveScrollPosition() {
+    lastScrollPosition = window.scrollY;
+}
+
+// Restore scroll position
+function restoreScrollPosition() {
+    if (lastScrollPosition > 0) {
+        setTimeout(() => {
+            window.scrollTo({
+                top: lastScrollPosition,
+                behavior: 'instant'
+            });
+        }, 50);
+    }
+}
+
+// Generate unique hash of current bookings (for change detection)
+function getBookingsHash(bookings) {
+    return JSON.stringify(bookings.map(b => ({
+        id: b.id,
+        status: b.status,
+        updatedAt: b.updatedAt || b.timestamp
+    })));
+}
+
+// Setup polling listener
+function setupPollingListener() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
     }
     
+    pollingInterval = setInterval(() => {
+        if (!isRefreshing && document.hasFocus()) {
+            refreshBookingsSilently();
+        }
+    }, 30000); // 30 seconds
+    
+    console.log('Auto-refresh enabled (every 30 seconds)');
+}
+
+// Silent refresh without user notification (preserves scroll)
+async function refreshBookingsSilently() {
+    isRefreshing = true;
+    
     try {
-        // Get Firebase database reference
-        const db = firebase.database();
-        const pendingRef = db.ref('/pendingBooking');
+        // Save current scroll position before refresh
+        saveScrollPosition();
         
-        // Query for airport transfer bookings only
-        firebaseListener = pendingRef.orderByChild('bookingType').equalTo('airportTransfer');
-        
-        // Listen for changes
-        firebaseListener.on('value', (snapshot) => {
-            const data = snapshot.val();
-            const now = Date.now();
+        // Check cache first
+        if (bookingsCache.isValid()) {
+            const cachedData = bookingsCache.get();
+            const newHash = getBookingsHash(cachedData.bookings);
             
-            // Debounce rapid updates (prevents too many refreshes)
-            if (lastUpdateTime && (now - lastUpdateTime) < 1000) {
-                if (!pendingRefresh) {
-                    pendingRefresh = true;
-                    setTimeout(() => {
-                        processRealtimeUpdate(data);
-                        pendingRefresh = false;
-                    }, 1000);
+            if (newHash !== lastBookingIdsHash) {
+                const oldCount = allBookings.length;
+                allBookings = cachedData.bookings;
+                lastBookingIdsHash = newHash;
+                
+                // Update UI without full re-render if possible
+                updateStats();
+                updateStatusCounts();
+                
+                // Only re-render if necessary
+                if (needsReRender(cachedData.bookings)) {
+                    renderBookingsCards();
+                } else {
+                    // Just update counts and badges without re-rendering cards
+                    updateCardStatuses(cachedData.bookings);
+                }
+                
+                // Notify only for new bookings
+                if (cachedData.bookings.length > oldCount) {
+                    toastInfo(`${cachedData.bookings.length - oldCount} new booking(s) received!`, 'Update');
+                }
+            }
+        } else {
+            // Fetch fresh data with ETag support
+            const response = await apiRequest(`/api/common/airport-transfer/bookings?status=all&_t=${Date.now()}`);
+            
+            if (response.status === 304) {
+                // Not modified, just update cache timestamp
+                if (bookingsCache.data) {
+                    bookingsCache.timestamp = Date.now();
                 }
                 return;
             }
             
-            lastUpdateTime = now;
-            processRealtimeUpdate(data);
+            if (!response.ok) {
+                throw new Error('Failed to refresh');
+            }
             
-        }, (error) => {
-            console.error('Firebase listener error:', error);
-            toastWarning('Real-time connection issue. Please refresh manually.', 'Connection');
-        });
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update cache
+                bookingsCache.set(data);
+                
+                const newHash = getBookingsHash(data.bookings);
+                
+                if (newHash !== lastBookingIdsHash) {
+                    const oldCount = allBookings.length;
+                    allBookings = data.bookings;
+                    lastBookingIdsHash = newHash;
+                    
+                    updateStats();
+                    updateStatusCounts();
+                    renderBookingsCards();
+                    
+                    // Notify only for new bookings
+                    if (data.bookings.length > oldCount) {
+                        toastInfo(`${data.bookings.length - oldCount} new booking(s) received!`, 'Update');
+                    }
+                }
+            }
+        }
         
-        console.log('Firebase realtime listener activated');
+        // Restore scroll position after refresh
+        restoreScrollPosition();
         
     } catch (error) {
-        console.error('Failed to setup Firebase listener:', error);
+        console.error('Auto-refresh error:', error);
+    } finally {
+        isRefreshing = false;
     }
 }
 
-function processRealtimeUpdate(data) {
-    if (!data) {
-        // No data, clear bookings if needed
-        if (allBookings.length > 0) {
-            allBookings = [];
-            renderBookingsCards();
-            updateStats();
-            toastInfo('All bookings cleared', 'Update');
-        }
-        return;
-    }
+// Check if UI needs full re-render
+function needsReRender(newBookings) {
+    // If status tab changed, need re-render
+    const currentFilteredCount = allBookings.filter(b => {
+        if (currentStatus === 'all') return true;
+        return b.status === currentStatus;
+    }).length;
     
-    // Transform Firebase data to array
-    const freshBookings = [];
-    for (const [id, booking] of Object.entries(data)) {
-        if (booking.bookingType === 'airportTransfer') {
-            freshBookings.push({
-                id: id,
-                ...booking
-            });
-        }
-    }
+    const newFilteredCount = newBookings.filter(b => {
+        if (currentStatus === 'all') return true;
+        return b.status === currentStatus;
+    }).length;
     
-    // Sort by date and time
-    freshBookings.sort((a, b) => {
-        const dateCompare = (b.date || '').localeCompare(a.date || '');
-        if (dateCompare !== 0) return dateCompare;
-        return (b.time || '').localeCompare(a.time || '');
+    // If counts differ or search/filters active, re-render
+    if (currentFilteredCount !== newFilteredCount) return true;
+    if (currentSearchTerm) return true;
+    if (currentDateFilter !== 'all') return true;
+    
+    return false;
+}
+
+// Update card statuses without full re-render (optimization)
+function updateCardStatuses(newBookings) {
+    const bookingCards = document.querySelectorAll('.booking-card');
+    
+    bookingCards.forEach(card => {
+        const bookingId = card.dataset.bookingId;
+        const updatedBooking = newBookings.find(b => b.id === bookingId);
+        
+        if (updatedBooking) {
+            // Update status badge
+            const statusBadge = card.querySelector('.status-badge');
+            if (statusBadge && updatedBooking.status !== allBookings.find(b => b.id === bookingId)?.status) {
+                const newStatusBadge = getStatusBadge(updatedBooking.status);
+                statusBadge.outerHTML = newStatusBadge;
+            }
+            
+            // Update payment badge
+            const paymentBadge = card.querySelector('.payment-badge');
+            if (paymentBadge && updatedBooking.paymentStatus !== allBookings.find(b => b.id === bookingId)?.paymentStatus) {
+                const newPaymentBadge = getPaymentStatusBadge(updatedBooking.paymentStatus);
+                paymentBadge.outerHTML = newPaymentBadge;
+            }
+            
+            // Update action buttons if status changed
+            const actionButtons = card.querySelector('.card-actions');
+            if (actionButtons && updatedBooking.status !== allBookings.find(b => b.id === bookingId)?.status) {
+                const newButtons = getCardActionButtons(updatedBooking);
+                actionButtons.innerHTML = newButtons;
+                
+                // Re-attach event listeners
+                attachCardActionListeners();
+            }
+        }
     });
-    
-    // Check if there are actual changes before updating UI
-    const hasChanges = JSON.stringify(freshBookings) !== JSON.stringify(allBookings);
-    
-    if (hasChanges) {
-        allBookings = freshBookings;
-        
-        // Filter by current status and render
-        const filteredByStatus = allBookings.filter(b => {
-            if (currentStatus === 'all') return true;
-            return b.status === currentStatus;
-        });
-        
-        // Update UI
-        updateStats();
-        updateStatusCounts();
-        
-        // Only re-render if the current tab has changes
-        if (filteredByStatus.length !== resultsCount.textContent || hasChanges) {
-            renderBookingsCards();
-        }
-        
-        // Show subtle notification for important changes
-        const changeType = detectChangeType(allBookings, freshBookings);
-        if (changeType === 'new') {
-            toastInfo('New booking received!', 'Real-time Update');
-        } else if (changeType === 'status_change') {
-            toastInfo('Booking status updated', 'Real-time Update');
-        }
+}
+
+function stopPollingListener() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        console.log('Auto-refresh stopped');
     }
-}
-
-function detectChangeType(oldBookings, newBookings) {
-    if (newBookings.length > oldBookings.length) return 'new';
-    if (JSON.stringify(oldBookings) !== JSON.stringify(newBookings)) return 'status_change';
-    return null;
-}
-
-function stopFirebaseListener() {
-    if (firebaseListener) {
-        firebaseListener.off();
-        firebaseListener = null;
-        console.log('Firebase listener stopped');
-    }
-}
-
-// ============================================
-// CACHE MANAGEMENT
-// ============================================
-
-let lastInitialLoad = null;
-const CACHE_DURATION = 30000; // 30 seconds
-
-// Check if cache is still valid
-function isCacheValid() {
-    return lastInitialLoad && (Date.now() - lastInitialLoad) < CACHE_DURATION;
 }
 
 // ============================================
 // GLOBAL VARIABLES
 // ============================================
-
-const SERVICE_TYPE = 'airportTransfer';
-let currentStatus = 'unassigned';
-let allBookings = [];
-let currentSearchTerm = '';
-let currentDateFilter = 'all';
 
 // DOM Elements
 const totalBookingsEl = document.getElementById('totalBookings');
@@ -226,19 +302,20 @@ const assignmentNotes = document.getElementById('assignmentNotes');
 document.addEventListener('DOMContentLoaded', () => {
     loadBookings();
     setupEventListeners();
-    setupFirebaseListener(); // Start real-time listener
+    setupPollingListener(); // Use polling instead of Firebase
 });
 
-// Clean up listener on page unload
+// Clean up on page unload
 window.addEventListener('beforeunload', () => {
-    stopFirebaseListener();
+    stopPollingListener();
 });
 
 // Setup all event listeners
 function setupEventListeners() {
-    // Status tabs
+    // Status tabs - save scroll before tab change
     document.querySelectorAll('.status-tab').forEach(tab => {
         tab.addEventListener('click', () => {
+            saveScrollPosition();
             document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             currentStatus = tab.dataset.status;
@@ -256,6 +333,7 @@ function setupEventListeners() {
             totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
             
             renderBookingsCards();
+            restoreScrollPosition();
         });
     });
 
@@ -264,21 +342,27 @@ function setupEventListeners() {
     searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
+            saveScrollPosition();
             currentSearchTerm = e.target.value.toLowerCase();
             renderBookingsCards();
+            restoreScrollPosition();
         }, 300);
     });
 
     // Date filter
     dateFilter.addEventListener('change', (e) => {
+        saveScrollPosition();
         currentDateFilter = e.target.value;
         renderBookingsCards();
+        restoreScrollPosition();
     });
 
     // Refresh button - force manual refresh
     refreshBtn.addEventListener('click', () => {
-        loadBookings(true); // Force refresh
+        saveScrollPosition();
+        loadBookings(true);
         toastInfo('Manually refreshed', 'Refresh');
+        setTimeout(() => restoreScrollPosition(), 100);
     });
 
     // Modal close buttons
@@ -356,14 +440,14 @@ function calculateStatusStats(bookings) {
 async function loadBookings(forceRefresh = false) {
     try {
         // Check cache for initial loads
-        if (!forceRefresh && isCacheValid() && allBookings.length > 0) {
+        if (!forceRefresh && bookingsCache.isValid() && allBookings.length > 0) {
             console.log('Using cached data');
             return;
         }
         
         showLoadingState();
         
-        const response = await apiRequest(`/api/common/airport-transfer/bookings?status=all`);
+        const response = await apiRequest(`/api/common/airport-transfer/bookings?status=all&_t=${Date.now()}`);
         
         if (!response.ok) {
             throw new Error('Failed to load bookings');
@@ -372,8 +456,11 @@ async function loadBookings(forceRefresh = false) {
         const data = await response.json();
         
         if (data.success) {
+            // Update cache
+            bookingsCache.set(data);
+            
             allBookings = data.bookings;
-            lastInitialLoad = Date.now();
+            lastBookingIdsHash = getBookingsHash(allBookings);
             
             // Filter by current status for display
             const filteredByStatus = allBookings.filter(b => {
@@ -694,7 +781,7 @@ function attachCardActionListeners() {
     });
 }
 
-// View booking details - USING apiRequest
+// View booking details
 async function viewBookingDetails(bookingId) {
     try {
         const response = await apiRequest(`/api/common/airport-transfer/bookings/${bookingId}`);
@@ -769,7 +856,7 @@ async function openAssignDriverModal(bookingId) {
     }
 }
 
-// Load available drivers - USING apiRequest
+// Load available drivers
 async function loadDrivers() {
     try {
         const response = await apiRequest('/api/common/airport-transfer/drivers/available');
@@ -794,7 +881,7 @@ async function loadDrivers() {
     }
 }
 
-// Load available vehicles - USING apiRequest
+// Load available vehicles
 async function loadVehicles() {
     try {
         const response = await apiRequest('/api/common/airport-transfer/vehicles/available');
@@ -819,7 +906,7 @@ async function loadVehicles() {
     }
 }
 
-// Handle assign driver - USING apiRequest
+// Handle assign driver
 async function handleAssignDriver(e) {
     e.preventDefault();
     const bookingId = selectedBookingId.value;
@@ -851,7 +938,8 @@ async function handleAssignDriver(e) {
             assignmentNotes.value = '';
             driverSelect.value = '';
             vehicleSelect.value = '';
-            // No need to call loadBookings() - Firebase listener will update automatically!
+            // Refresh data after assignment
+            loadBookings(true);
         } else {
             toastError(data.message || 'Failed to assign driver', 'Assignment Failed');
         }
@@ -871,7 +959,7 @@ function openCancelBookingModal(bookingId) {
     cancelBookingModal.style.display = 'flex';
 }
 
-// Handle cancel booking - USING apiRequest
+// Handle cancel booking
 async function handleCancelBooking(e) {
     e.preventDefault();
     const bookingId = cancelBookingId.value;
@@ -899,7 +987,8 @@ async function handleCancelBooking(e) {
             toastSuccess('Booking cancelled successfully!', 'Cancelled');
             cancelBookingModal.style.display = 'none';
             cancelReason.value = '';
-            // No need to call loadBookings() - Firebase listener will update automatically!
+            // Refresh data after cancellation
+            loadBookings(true);
         } else {
             toastError(data.message || 'Failed to cancel booking', 'Error');
         }
@@ -919,7 +1008,7 @@ function openCompleteBookingModal(bookingId) {
     completeBookingModal.style.display = 'flex';
 }
 
-// Handle complete booking - USING apiRequest
+// Handle complete booking
 async function handleCompleteBooking(e) {
     e.preventDefault();
     const bookingId = completeBookingId.value;
@@ -942,7 +1031,8 @@ async function handleCompleteBooking(e) {
             toastSuccess('Booking marked as completed!', 'Complete');
             completeBookingModal.style.display = 'none';
             completionNotes.value = '';
-            // No need to call loadBookings() - Firebase listener will update automatically!
+            // Refresh data after completion
+            loadBookings(true);
         } else {
             toastError(data.message || 'Failed to complete booking', 'Error');
         }

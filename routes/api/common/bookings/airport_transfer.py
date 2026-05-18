@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 import hashlib
 import json
+import logging
 from functools import wraps
 from backend.decorators import login_required_api, role_required_api
 
@@ -14,6 +15,10 @@ airport_transfer_bp = Blueprint('airport_transfer', __name__)
 # Constants
 SERVICE_TYPE = 'airportTransfer'
 PH_TIMEZONE = pytz.timezone('Asia/Manila')
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Simple in-memory cache
 cache = {}
@@ -57,6 +62,17 @@ def invalidate_cache():
     global cache
     cache.clear()
     print(f"Cache cleared at {datetime.now(PH_TIMEZONE)}")
+
+def log_request(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        logger.info(f"Request: {request.method} {request.path} - User: {session.get('user_id', 'anonymous')}")
+        start_time = datetime.now(PH_TIMEZONE)
+        result = f(*args, **kwargs)
+        duration = (datetime.now(PH_TIMEZONE) - start_time).total_seconds()
+        logger.info(f"Response: {request.method} {request.path} - Duration: {duration:.3f}s")
+        return result
+    return decorated_function
 
 # ============================================
 # HELPER FUNCTIONS
@@ -140,7 +156,7 @@ def format_booking_response(booking):
         'amount': float(booking.get('amount', 0)),
         'paymentStatus': booking.get('paymentStatus', 'pending'),
         'paymentMethod': booking.get('paymentMethod', 'N/A'),
-        'status': booking.get('status', 'unassigned'),  # Use status field directly
+        'status': booking.get('status', 'unassigned'),
         'date': booking.get('date', ''),
         'time': booking.get('time', ''),
         'pickup': booking.get('pickup', ''),
@@ -164,17 +180,20 @@ def format_booking_response(booking):
     }
 
 # ============================================
-# API ROUTES WITH CACHING
+# API ROUTES WITH CACHING & POLLING OPTIMIZATIONS
 # ============================================
 
 @airport_transfer_bp.route('/common/airport-transfer/bookings', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
-@cached(timeout=30)
+@log_request
 def get_airport_transfer_bookings():
-    """Get airport transfer bookings filtered by status field"""
+    """Get airport transfer bookings with conditional GET support for polling"""
     try:
         status = request.args.get('status', 'unassigned')
+        
+        # Get the If-None-Match header for cache validation
+        if_none_match = request.headers.get('If-None-Match')
         
         if status == 'all':
             bookings = get_airport_transfer_bookings_by_status()
@@ -183,12 +202,27 @@ def get_airport_transfer_bookings():
         
         formatted_bookings = [format_booking_response(b) for b in bookings]
         
-        return jsonify({
+        # Generate ETag based on bookings data
+        etag = hashlib.md5(json.dumps(formatted_bookings, sort_keys=True).encode()).hexdigest()
+        
+        # If ETag matches, return 304 Not Modified (saves bandwidth)
+        if if_none_match and if_none_match.strip('"') == etag:
+            return '', 304
+        
+        response = jsonify({
             'success': True,
             'bookings': formatted_bookings,
             'total': len(formatted_bookings),
-            'status': status
-        }), 200
+            'status': status,
+            'timestamp': datetime.now(PH_TIMEZONE).isoformat(),
+            'etag': etag
+        })
+        
+        response.headers['ETag'] = f'"{etag}"'
+        response.headers['Cache-Control'] = 'max-age=30, must-revalidate'
+        response.headers['Last-Modified'] = datetime.now(PH_TIMEZONE).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        
+        return response, 200
         
     except Exception as e:
         print(f"Error: {e}")
@@ -394,7 +428,7 @@ def complete_airport_transfer_booking(booking_id):
 @airport_transfer_bp.route('/common/airport-transfer/drivers/available', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
-@cached(timeout=120)
+@cached(timeout=60)
 def get_available_drivers():
     """Get all available drivers"""
     try:
@@ -423,10 +457,22 @@ def get_available_drivers():
 @airport_transfer_bp.route('/common/airport-transfer/vehicles/available', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
-@cached(timeout=120)
+@cached(timeout=60)
 def get_available_vehicles():
-    """Get all available vehicles"""
+    """Get all available vehicles, not currently assigned to active bookings"""
     try:
+        # Get current bookings to check which vehicles are already assigned
+        all_bookings = get_all_airport_transfer_bookings()
+        assigned_vehicle_ids = set()
+        
+        # Find vehicles currently assigned to active bookings
+        for booking in all_bookings:
+            status = booking.get('status')
+            if status in ['assigned', 'in_progress']:  # Active bookings
+                assigned_vehicle = booking.get('assigned_vehicle')
+                if assigned_vehicle and assigned_vehicle.get('id'):
+                    assigned_vehicle_ids.add(assigned_vehicle.get('id'))
+        
         units_ref = db.reference('transportUnits')
         all_units = units_ref.get()
         
@@ -438,7 +484,11 @@ def get_available_vehicles():
         for unit_id, unit_data in all_units.items():
             is_available = unit_data.get('isAvailable', True)
             
-            if is_available:
+            # Check if vehicle is already assigned to an active booking
+            is_assigned = unit_id in assigned_vehicle_ids
+            
+            # Vehicle is available if: marked available AND not assigned to active booking
+            if is_available and not is_assigned:
                 available_vehicles.append({
                     'id': unit_id,
                     'vehicle_name': unit_data.get('transportUnit', 'N/A'),
@@ -453,6 +503,63 @@ def get_available_vehicles():
     except Exception as e:
         print(f"Error getting vehicles: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+# ============================================
+# POLLING OPTIMIZATION ENDPOINTS
+# ============================================
+
+@airport_transfer_bp.route('/common/airport-transfer/last-updated', methods=['GET'])
+@login_required_api
+@role_required_api(['superadmin', 'admin'])
+def get_last_updated():
+    """Get the last update timestamp for bookings (for polling optimization)"""
+    try:
+        all_bookings = get_all_airport_transfer_bookings()
+        
+        last_updated = None
+        for booking in all_bookings:
+            # Check various timestamp fields
+            booking_time = (booking.get('timestamp') or 
+                          booking.get('assigned_at') or 
+                          booking.get('completed_at') or
+                          booking.get('cancelled_at'))
+            
+            if booking_time:
+                if not last_updated or booking_time > last_updated:
+                    last_updated = booking_time
+        
+        return jsonify({
+            'success': True,
+            'last_updated': last_updated,
+            'server_time': datetime.now(PH_TIMEZONE).isoformat(),
+            'total_bookings': len(all_bookings)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@airport_transfer_bp.route('/common/airport-transfer/health', methods=['GET'])
+def health_check():
+    """Simple health check endpoint for monitoring"""
+    try:
+        # Check if Firebase is accessible
+        pending_ref = db.reference('/pendingBooking')
+        test = pending_ref.get(shallow=True)
+        
+        return jsonify({
+            'success': True,
+            'status': 'healthy',
+            'service': 'airport_transfer',
+            'timestamp': datetime.now(PH_TIMEZONE).isoformat(),
+            'firebase_connected': test is not None
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now(PH_TIMEZONE).isoformat()
+        }), 500
 
 # ============================================
 # CACHE MANAGEMENT
