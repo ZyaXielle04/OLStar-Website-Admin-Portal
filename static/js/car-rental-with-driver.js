@@ -1,4 +1,4 @@
-// car-rental-with-driver.js - With Driver specific logic with CSRF support
+// car-rental-with-driver.js - With Driver specific logic with CSRF support and Discounts
 (function() {
     'use strict';
     
@@ -8,12 +8,15 @@
     let currentServiceType = 'metro_manila'; // 'metro_manila' or 'provincial'
     let currentRateType = 'regular'; // 'regular' or 'all_in' (for metro manila)
     let currentPackageType = 'one_way'; // 'one_way', 'roundtrip', 'tour' (for provincial)
+    let currentDiscountData = null;
     
     let withDriverData = {
         vehicleTypes: ['Sedan', 'SUV/MPV', 'Van'],
         durations: [],
         metroManilaRates: {},
         provincialRates: {},
+        discountedMetroManilaRates: {},
+        discountedProvincialRates: {},
         provincialDestinations: []
     };
     
@@ -40,7 +43,6 @@
             'Content-Type': 'application/json',
         };
         
-        // Add CSRF token for non-GET requests
         if (method !== 'GET' && csrfToken) {
             defaultHeaders['X-CSRFToken'] = csrfToken;
         }
@@ -52,7 +54,7 @@
                 ...defaultHeaders,
                 ...options.headers
             },
-            credentials: 'include'  // Important for cookies
+            credentials: 'include'
         };
         
         return fetch(url, config);
@@ -106,6 +108,37 @@
         return parseInt(value).toLocaleString();
     }
     
+    // Helper function to calculate discounted price
+    function calculateDiscountedPrice(originalPrice, discount) {
+        if (!discount || !discount.active) return originalPrice;
+        
+        const priceNum = parseFloat(originalPrice);
+        if (isNaN(priceNum) || priceNum <= 0) return originalPrice;
+        
+        let discountedPrice;
+        if (discount.discountType === 'percentage') {
+            const discountAmount = priceNum * (parseFloat(discount.value) / 100);
+            discountedPrice = priceNum - discountAmount;
+        } else {
+            discountedPrice = priceNum - parseFloat(discount.value);
+        }
+        
+        return Math.max(0, Math.round(discountedPrice));
+    }
+    
+    // Helper function to format price with discount display
+    function formatPriceWithDiscount(originalPrice, discountedPrice, hasDiscount) {
+        if (hasDiscount && discountedPrice !== originalPrice && originalPrice > 0) {
+            return `
+                <div class="price-container">
+                    <span class="original-price">₱${formatNumber(originalPrice)}</span>
+                    <span class="discounted-price">₱${formatNumber(discountedPrice)}</span>
+                </div>
+            `;
+        }
+        return `<span class="price-display">₱${formatNumber(originalPrice)}</span>`;
+    }
+    
     // Confirmation modal
     let confirmResolver = null;
     
@@ -155,6 +188,275 @@
                 closeModal('confirmModalWD');
             }
         });
+    }
+    
+    // ========== DISCOUNT MANAGEMENT ==========
+    
+    async function loadDiscountSettings() {
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/discount`);
+            const data = await response.json();
+            
+            if (data.hasDiscount) {
+                currentDiscountData = data.discount;
+                renderDiscountInfo(currentDiscountData);
+            } else {
+                renderNoDiscount();
+            }
+        } catch (error) {
+            console.error('Error loading discount settings:', error);
+            renderNoDiscount();
+        }
+    }
+
+    function formatDateTime(dateTimeString) {
+        if (!dateTimeString) return null;
+        const date = new Date(dateTimeString);
+        return date.toLocaleString();
+    }
+    
+    function renderDiscountInfo(discount) {
+        const container = document.getElementById('discountContainerWD');
+        if (!container) return;
+        
+        if (!discount) {
+            renderNoDiscount();
+            return;
+        }
+        
+        const discountValue = discount.discountType === 'percentage' 
+            ? `${discount.value}% OFF` 
+            : `₱${parseFloat(discount.value).toLocaleString()} OFF`;
+        
+        const discountClass = discount.discountType === 'percentage' ? 'percentage' : 'fixed';
+        
+        let validityHtml = '';
+        const now = new Date();
+        
+        // Check valid from
+        let isValid = true;
+        let validFromHtml = '';
+        if (discount.validFrom) {
+            const validFrom = new Date(discount.validFrom);
+            const isNotStartedYet = validFrom > now;
+            validFromHtml = `
+                <div class="discount-validity">
+                    <i class="fas fa-calendar-alt"></i>
+                    Starts: ${validFrom.toLocaleString()}
+                    ${isNotStartedYet ? '<span style="color: #f59e0b;"> (Not yet active)</span>' : ''}
+                </div>
+            `;
+            if (isNotStartedYet) isValid = false;
+        }
+        
+        // Check valid until
+        let validUntilHtml = '';
+        if (discount.validUntil) {
+            const validUntil = new Date(discount.validUntil);
+            const isExpired = validUntil < now;
+            validUntilHtml = `
+                <div class="discount-validity">
+                    <i class="fas fa-calendar-alt"></i>
+                    Expires: ${validUntil.toLocaleString()}
+                    ${isExpired ? '<span style="color: #ef4444;"> (Expired)</span>' : ''}
+                </div>
+            `;
+            if (isExpired) isValid = false;
+        }
+        
+        const statusBadge = isValid ? 
+            '<span class="discount-status active">Active</span>' : 
+            '<span class="discount-status inactive">Inactive</span>';
+        
+        container.innerHTML = `
+            <div class="discount-info">
+                <div class="discount-info-item">
+                    <span class="discount-label">Current Discount:</span>
+                    <span class="discount-value ${discountClass}">${discountValue}</span>
+                    ${statusBadge}
+                </div>
+                ${discount.description ? `
+                <div class="discount-info-item">
+                    <span class="discount-label">Description:</span>
+                    <span class="discount-description">${escapeHtml(discount.description)}</span>
+                </div>
+                ` : ''}
+                ${validFromHtml}
+                ${validUntilHtml}
+                <div class="discount-info-item">
+                    <span class="discount-label">Created:</span>
+                    <span class="discount-date">${new Date(discount.createdAt).toLocaleString()}</span>
+                </div>
+                ${sessionRole === 'superadmin' ? `
+                <div class="discount-actions" style="margin-top: 0.75rem;">
+                    <button class="btn-icon-sm" onclick="window.withDriver.openDiscountModal()">
+                        <i class="fas fa-edit"></i> Edit Discount
+                    </button>
+                    <button class="btn-icon-sm btn-danger" onclick="window.withDriver.removeGlobalDiscount()">
+                        <i class="fas fa-trash"></i> Remove Discount
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    function renderNoDiscount() {
+        const container = document.getElementById('discountContainerWD');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="no-discount">
+                <i class="fas fa-tag" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+                <p>No active global discount</p>
+                <small>Click Manage Discount to add a global discount that will apply to all rates</small>
+                ${sessionRole === 'superadmin' ? `
+                <div class="discount-actions" style="margin-top: 0.75rem;">
+                    <button class="btn-icon-sm" onclick="window.withDriver.openDiscountModal()">
+                        <i class="fas fa-plus"></i> Add Global Discount
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    function openDiscountModal() {
+        const modal = document.getElementById('discountModalWD');
+        if (!modal) return;
+        
+        if (currentDiscountData) {
+            document.getElementById('discountTypeWD').value = currentDiscountData.discountType || 'percentage';
+            document.getElementById('discountValueWD').value = currentDiscountData.value || '';
+            document.getElementById('discountDescriptionWD').value = currentDiscountData.description || '';
+            
+            // Handle validFrom - convert to datetime-local format
+            if (currentDiscountData.validFrom) {
+                const fromDate = new Date(currentDiscountData.validFrom);
+                const fromValue = fromDate.toISOString().slice(0, 16);
+                document.getElementById('discountValidFromWD').value = fromValue;
+            } else {
+                document.getElementById('discountValidFromWD').value = '';
+            }
+            
+            // Handle validUntil - convert to datetime-local format
+            if (currentDiscountData.validUntil) {
+                const untilDate = new Date(currentDiscountData.validUntil);
+                const untilValue = untilDate.toISOString().slice(0, 16);
+                document.getElementById('discountValidUntilWD').value = untilValue;
+            } else {
+                document.getElementById('discountValidUntilWD').value = '';
+            }
+        } else {
+            const form = document.getElementById('discountFormWD');
+            if (form) form.reset();
+            document.getElementById('discountTypeWD').value = 'percentage';
+            document.getElementById('discountValidFromWD').value = '';
+            document.getElementById('discountValidUntilWD').value = '';
+        }
+        
+        modal.style.display = 'flex';
+    }
+    
+    function closeDiscountModal() {
+        const modal = document.getElementById('discountModalWD');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    async function saveGlobalDiscount(e) {
+        e.preventDefault();
+        
+        const discountType = document.getElementById('discountTypeWD').value;
+        const discountValue = document.getElementById('discountValueWD').value;
+        const description = document.getElementById('discountDescriptionWD').value;
+        const validFrom = document.getElementById('discountValidFromWD').value;
+        const validUntil = document.getElementById('discountValidUntilWD').value;
+        const applyToAll = document.getElementById('applyToAllWD')?.checked || false;
+        
+        if (!discountValue) {
+            showNotification('Discount value is required', 'error');
+            return;
+        }
+        
+        const valueNum = parseFloat(discountValue);
+        if (discountType === 'percentage' && (valueNum < 0 || valueNum > 100)) {
+            showNotification('Percentage must be between 0 and 100', 'error');
+            return;
+        }
+        
+        if (discountType === 'fixed' && valueNum < 0) {
+            showNotification('Fixed discount cannot be negative', 'error');
+            return;
+        }
+        
+        // Validate that validFrom is before validUntil if both are provided
+        if (validFrom && validUntil) {
+            const fromDate = new Date(validFrom);
+            const untilDate = new Date(validUntil);
+            if (fromDate >= untilDate) {
+                showNotification('Valid From date must be before Valid Until date', 'error');
+                return;
+            }
+        }
+        
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/discount`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    discountType,
+                    value: discountValue,
+                    description,
+                    validFrom: validFrom || '',
+                    validUntil: validUntil || '',
+                    applyToAll
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                showNotification('Global discount applied successfully!', 'success');
+                closeDiscountModal();
+                await loadDiscountSettings();
+                await loadRateData();
+            } else {
+                showNotification(data.error || 'Failed to save discount settings', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving discount:', error);
+            showNotification('An unexpected error occurred', 'error');
+        }
+    }
+    
+    async function removeGlobalDiscount() {
+        const confirmed = await showConfirmModal(
+            'Remove Global Discount',
+            'Are you sure you want to remove the global discount? This will remove discount from all rates.',
+            'Remove',
+            'Cancel'
+        );
+        
+        if (!confirmed) return;
+        
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/discount?removeFromRates=true`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            
+            if (response.ok) {
+                showNotification('Global discount removed successfully', 'success');
+                await loadDiscountSettings();
+                await loadRateData();
+            } else {
+                showNotification(data.error || 'Failed to remove discount', 'error');
+            }
+        } catch (error) {
+            console.error('Error removing discount:', error);
+            showNotification('An unexpected error occurred', 'error');
+        }
     }
     
     // ========== SERVICE TYPE TOGGLE ==========
@@ -298,6 +600,21 @@
         }
     }
     
+    async function toggleProvincialDestination(destinationKey) {
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/provincial/destinations/${destinationKey}/toggle`, { 
+                method: 'PATCH'
+            });
+            if (!response.ok) throw new Error('Failed to toggle destination');
+            const data = await response.json();
+            showNotification(data.message);
+            await loadDestinationsList();
+            await loadProvincialDestinations();
+        } catch (error) {
+            showNotification('Failed to toggle destination', 'error');
+        }
+    }
+    
     // ========== PROVINCIAL DESTINATIONS (for matrix) ==========
     
     async function loadProvincialDestinations() {
@@ -305,7 +622,6 @@
             const response = await apiRequest(`${API_BASE_URL}/provincial/destinations`);
             if (!response.ok) throw new Error('Failed to load destinations');
             const data = await response.json();
-            // Store ALL destinations for management, but only ACTIVE ones for the matrix
             withDriverData.allProvincialDestinations = data.destinations || [];
             withDriverData.provincialDestinations = (data.destinations || []).filter(d => d.isActive !== false);
             renderProvincialRateTable();
@@ -368,6 +684,64 @@
         `).join('');
     }
     
+    async function addWithDriverDuration() {
+        const name = document.getElementById('durationNameWD').value.trim();
+        const hours = parseInt(document.getElementById('durationHoursWD').value);
+        
+        if (!name || !hours || hours <= 0) {
+            showNotification('Duration name and valid hours are required', 'error');
+            return;
+        }
+        
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/durations`, {
+                method: 'POST',
+                body: JSON.stringify({ name, hours })
+            });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to add duration');
+            }
+            showNotification('Duration added');
+            closeModal('durationModalWD');
+            document.getElementById('durationNameWD').value = '';
+            document.getElementById('durationHoursWD').value = '';
+            await loadWithDriverDurations();
+        } catch (error) {
+            showNotification(error.message, 'error');
+        }
+    }
+    
+    async function toggleWithDriverDuration(durationKey) {
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}/toggle`, { 
+                method: 'PATCH'
+            });
+            if (!response.ok) throw new Error('Failed to toggle duration');
+            const data = await response.json();
+            showNotification(data.message);
+            await loadWithDriverDurations();
+        } catch (error) {
+            showNotification('Failed to toggle duration', 'error');
+        }
+    }
+    
+    async function deleteWithDriverDuration(durationKey) {
+        const confirmed = await showConfirmModal('Delete Duration', 'Are you sure you want to delete this duration? This action cannot be undone.');
+        if (!confirmed) return;
+        
+        try {
+            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}`, { 
+                method: 'DELETE'
+            });
+            if (!response.ok) throw new Error('Failed to delete duration');
+            showNotification('Duration deleted successfully');
+            await loadWithDriverDurations();
+        } catch (error) {
+            showNotification('Failed to delete duration', 'error');
+        }
+    }
+    
     // ========== METRO MANILA RATE TABLE ==========
     
     function initializeMetroManilaRateTypeFilter() {
@@ -392,11 +766,35 @@
     }
     
     function getMetroManilaRate(vehicleType, durationKey) {
-        const ratePath = withDriverData.metroManilaRates[currentRateType];
-        if (ratePath && ratePath[vehicleType] && ratePath[vehicleType][durationKey]) {
-            return parseInt(ratePath[vehicleType][durationKey]);
+        // First try to get discounted rate
+        if (withDriverData.discountedMetroManilaRates[currentRateType] && 
+            withDriverData.discountedMetroManilaRates[currentRateType][vehicleType] && 
+            withDriverData.discountedMetroManilaRates[currentRateType][vehicleType][durationKey]) {
+            return parseInt(withDriverData.discountedMetroManilaRates[currentRateType][vehicleType][durationKey]);
+        }
+        
+        // Fall back to original rate
+        if (withDriverData.metroManilaRates[currentRateType] && 
+            withDriverData.metroManilaRates[currentRateType][vehicleType] && 
+            withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey]) {
+            return parseInt(withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey]);
         }
         return 0;
+    }
+    
+    function getOriginalMetroManilaRate(vehicleType, durationKey) {
+        if (withDriverData.metroManilaRates[currentRateType] && 
+            withDriverData.metroManilaRates[currentRateType][vehicleType] && 
+            withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey]) {
+            return parseInt(withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey]);
+        }
+        return 0;
+    }
+    
+    function hasMetroManilaDiscount(vehicleType, durationKey) {
+        return withDriverData.discountedMetroManilaRates[currentRateType] && 
+               withDriverData.discountedMetroManilaRates[currentRateType][vehicleType] && 
+               withDriverData.discountedMetroManilaRates[currentRateType][vehicleType][durationKey];
     }
     
     function renderMetroManilaRateTable() {
@@ -435,14 +833,30 @@
             rowsHtml += `<td><strong>${escapeHtml(vehicleType)}</strong></td>`;
             
             for (const duration of activeDurations) {
-                const rate = getMetroManilaRate(vehicleType, duration.key);
+                const originalRate = getOriginalMetroManilaRate(vehicleType, duration.key);
+                const displayRate = getMetroManilaRate(vehicleType, duration.key);
+                const hasDiscount = hasMetroManilaDiscount(vehicleType, duration.key);
                 
-                rowsHtml += `<td class="rate-price" data-vehicle-type="${vehicleType}" data-duration="${duration.key}" data-current-rate="${rate}">
+                let discountBadge = '';
+                if (hasDiscount && originalRate > 0 && displayRate !== originalRate && currentDiscountData) {
+                    const discountValue = currentDiscountData.discountType === 'percentage' 
+                        ? `${currentDiscountData.value}% OFF`
+                        : `₱${parseFloat(currentDiscountData.value).toLocaleString()} OFF`;
+                    discountBadge = `<span class="discount-indicator" title="${discountValue}">${discountValue}</span>`;
+                }
+                
+                const priceHtml = formatPriceWithDiscount(originalRate, displayRate, hasDiscount && displayRate !== originalRate);
+                
+                rowsHtml += `<td class="rate-price ${hasDiscount ? 'has-discount' : ''}" 
+                    data-vehicle-type="${vehicleType}" 
+                    data-duration="${duration.key}" 
+                    data-current-rate="${originalRate}">
                     <div class="price-info">
-                        <span class="base-price">₱${formatNumber(rate)}</span>
-                        <span class="price-breakdown">(${duration.hours}hrs)</span>
+                        ${priceHtml}
+                        ${discountBadge}
+                        <div class="price-breakdown">(${duration.hours}hrs)</div>
                     </div>
-                 </td>`;
+                   </div>`;
             }
             
             rowsHtml += '</tr>';
@@ -490,11 +904,35 @@
     }
     
     function getProvincialRate(vehicleType, destinationKey) {
-        const packageRates = withDriverData.provincialRates[currentPackageType];
-        if (packageRates && packageRates[vehicleType] && packageRates[vehicleType][destinationKey]) {
-            return parseInt(packageRates[vehicleType][destinationKey]);
+        // First try to get discounted rate
+        if (withDriverData.discountedProvincialRates[currentPackageType] && 
+            withDriverData.discountedProvincialRates[currentPackageType][vehicleType] && 
+            withDriverData.discountedProvincialRates[currentPackageType][vehicleType][destinationKey]) {
+            return parseInt(withDriverData.discountedProvincialRates[currentPackageType][vehicleType][destinationKey]);
+        }
+        
+        // Fall back to original rate
+        if (withDriverData.provincialRates[currentPackageType] && 
+            withDriverData.provincialRates[currentPackageType][vehicleType] && 
+            withDriverData.provincialRates[currentPackageType][vehicleType][destinationKey]) {
+            return parseInt(withDriverData.provincialRates[currentPackageType][vehicleType][destinationKey]);
         }
         return 0;
+    }
+    
+    function getOriginalProvincialRate(vehicleType, destinationKey) {
+        if (withDriverData.provincialRates[currentPackageType] && 
+            withDriverData.provincialRates[currentPackageType][vehicleType] && 
+            withDriverData.provincialRates[currentPackageType][vehicleType][destinationKey]) {
+            return parseInt(withDriverData.provincialRates[currentPackageType][vehicleType][destinationKey]);
+        }
+        return 0;
+    }
+    
+    function hasProvincialDiscount(vehicleType, destinationKey) {
+        return withDriverData.discountedProvincialRates[currentPackageType] && 
+               withDriverData.discountedProvincialRates[currentPackageType][vehicleType] && 
+               withDriverData.discountedProvincialRates[currentPackageType][vehicleType][destinationKey];
     }
     
     function renderProvincialRateTable() {
@@ -502,12 +940,12 @@
         const thead = document.getElementById('provincialTableHeaderWD');
         
         if (!withDriverData.vehicleTypes || withDriverData.vehicleTypes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No vehicle types available</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No vehicle types available</div><tr>';
             return;
         }
         
         if (!withDriverData.provincialDestinations || withDriverData.provincialDestinations.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No provincial destinations configured. Click "Add Destination" to add destinations.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No provincial destinations configured. Click "Add Destination" to add destinations.</div></tr>';
             return;
         }
         
@@ -533,16 +971,33 @@
         
         for (const vehicleType of withDriverData.vehicleTypes) {
             rowsHtml += '<tr>';
-            rowsHtml += `<td><strong>${escapeHtml(vehicleType)}</strong></td>`;
+            rowsHtml += `<td><strong>${escapeHtml(vehicleType)}</strong></div>`;
             
             for (const destination of withDriverData.provincialDestinations) {
-                const rate = getProvincialRate(vehicleType, destination.key);
+                const originalRate = getOriginalProvincialRate(vehicleType, destination.key);
+                const displayRate = getProvincialRate(vehicleType, destination.key);
+                const hasDiscount = hasProvincialDiscount(vehicleType, destination.key);
                 
-                rowsHtml += `<td class="rate-price" data-vehicle-type="${vehicleType}" data-destination="${destination.key}" data-current-rate="${rate}" style="min-width: 150px;">
+                let discountBadge = '';
+                if (hasDiscount && originalRate > 0 && displayRate !== originalRate && currentDiscountData) {
+                    const discountValue = currentDiscountData.discountType === 'percentage' 
+                        ? `${currentDiscountData.value}% OFF`
+                        : `₱${parseFloat(currentDiscountData.value).toLocaleString()} OFF`;
+                    discountBadge = `<span class="discount-indicator" title="${discountValue}">${discountValue}</span>`;
+                }
+                
+                const priceHtml = formatPriceWithDiscount(originalRate, displayRate, hasDiscount && displayRate !== originalRate);
+                
+                rowsHtml += `<td class="rate-price ${hasDiscount ? 'has-discount' : ''}" 
+                    data-vehicle-type="${vehicleType}" 
+                    data-destination="${destination.key}" 
+                    data-current-rate="${originalRate}" 
+                    style="min-width: 150px;">
                     <div class="price-info">
-                        <span class="base-price">₱${formatNumber(rate)}</span>
+                        ${priceHtml}
+                        ${discountBadge}
                     </div>
-                 </td>`;
+                   </div>`;
             }
             
             rowsHtml += '</tr>';
@@ -630,42 +1085,18 @@
                 
                 if (!response.ok) throw new Error('Failed to save rate');
                 
-                // If rate is 0, delete from local data
-                if (newRate === 0) {
-                    if (withDriverData.metroManilaRates[currentRateType] &&
-                        withDriverData.metroManilaRates[currentRateType][vehicleType] &&
-                        withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey]) {
-                        delete withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey];
-                    }
-                    if (withDriverData.metroManilaRates[currentRateType] &&
-                        withDriverData.metroManilaRates[currentRateType][vehicleType] &&
-                        Object.keys(withDriverData.metroManilaRates[currentRateType][vehicleType]).length === 0) {
-                        delete withDriverData.metroManilaRates[currentRateType][vehicleType];
-                    }
-                } else {
-                    if (!withDriverData.metroManilaRates[currentRateType]) {
-                        withDriverData.metroManilaRates[currentRateType] = {};
-                    }
-                    if (!withDriverData.metroManilaRates[currentRateType][vehicleType]) {
-                        withDriverData.metroManilaRates[currentRateType][vehicleType] = {};
-                    }
-                    withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey] = newRate;
-                }
+                showNotification('Rate saved successfully', 'success');
+                await loadRateData();
                 
-                cell.setAttribute('data-current-rate', newRate);
-                
-                if (newRate === 0) {
-                    showNotification('Rate deleted successfully (set to 0)', 'info');
-                } else {
-                    showNotification('Rate saved successfully', 'success');
-                }
-                
-                renderMetroManilaRateTable();
             } catch (error) {
                 console.error('Save error:', error);
-                showNotification('Failed to save rate', 'error');
+                showNotification(error.message, 'error');
                 cell.innerHTML = originalContent;
             }
+        };
+        
+        const cancelEdit = () => {
+            cell.innerHTML = originalContent;
         };
         
         input.addEventListener('blur', savePrice);
@@ -674,7 +1105,8 @@
                 e.preventDefault();
                 savePrice();
             } else if (e.key === 'Escape') {
-                cell.innerHTML = originalContent;
+                e.preventDefault();
+                cancelEdit();
             }
         });
     }
@@ -712,45 +1144,18 @@
                 
                 if (!response.ok) throw new Error('Failed to save rate');
                 
-                // If rate is 0 or deleted, remove from local data
-                if (newRate === 0) {
-                    // Delete the rate from local data if it exists
-                    if (withDriverData.provincialRates[currentPackageType] &&
-                        withDriverData.provincialRates[currentPackageType][vehicleType] &&
-                        withDriverData.provincialRates[currentPackageType][vehicleType][destinationKey]) {
-                        delete withDriverData.provincialRates[currentPackageType][vehicleType][destinationKey];
-                    }
-                    // If the vehicle type has no more rates, clean up
-                    if (withDriverData.provincialRates[currentPackageType] &&
-                        withDriverData.provincialRates[currentPackageType][vehicleType] &&
-                        Object.keys(withDriverData.provincialRates[currentPackageType][vehicleType]).length === 0) {
-                        delete withDriverData.provincialRates[currentPackageType][vehicleType];
-                    }
-                } else {
-                    // Update local data
-                    if (!withDriverData.provincialRates[currentPackageType]) {
-                        withDriverData.provincialRates[currentPackageType] = {};
-                    }
-                    if (!withDriverData.provincialRates[currentPackageType][vehicleType]) {
-                        withDriverData.provincialRates[currentPackageType][vehicleType] = {};
-                    }
-                    withDriverData.provincialRates[currentPackageType][vehicleType][destinationKey] = newRate;
-                }
+                showNotification('Rate saved successfully', 'success');
+                await loadRateData();
                 
-                cell.setAttribute('data-current-rate', newRate);
-                
-                if (newRate === 0) {
-                    showNotification('Rate deleted successfully (set to 0)', 'info');
-                } else {
-                    showNotification('Rate saved successfully', 'success');
-                }
-                
-                renderProvincialRateTable();
             } catch (error) {
                 console.error('Save error:', error);
-                showNotification('Failed to save rate', 'error');
+                showNotification(error.message, 'error');
                 cell.innerHTML = originalContent;
             }
+        };
+        
+        const cancelEdit = () => {
+            cell.innerHTML = originalContent;
         };
         
         input.addEventListener('blur', savePrice);
@@ -759,7 +1164,8 @@
                 e.preventDefault();
                 savePrice();
             } else if (e.key === 'Escape') {
-                cell.innerHTML = originalContent;
+                e.preventDefault();
+                cancelEdit();
             }
         });
     }
@@ -773,6 +1179,13 @@
             const data = await response.json();
             withDriverData.metroManilaRates = data.metroManila || {};
             withDriverData.provincialRates = data.provincial || {};
+            withDriverData.discountedMetroManilaRates = data.discountedMetroManila || {};
+            withDriverData.discountedProvincialRates = data.discountedProvincial || {};
+            
+            if (data.discount) {
+                currentDiscountData = data.discount;
+                renderDiscountInfo(currentDiscountData);
+            }
             
             if (currentServiceType === 'metro_manila') {
                 renderMetroManilaRateTable();
@@ -782,6 +1195,20 @@
         } catch (error) {
             console.error('Error loading rate data:', error);
             showNotification('Failed to load rate data', 'error');
+        }
+    }
+    
+    // ========== REFRESH ==========
+    
+    async function refreshWithDriverData() {
+        if (window.withDriverInitialized) {
+            await Promise.all([
+                loadDestinationsList(),
+                loadProvincialDestinations(),
+                loadWithDriverDurations(),
+                loadRateData(),
+                loadDiscountSettings()
+            ]);
         }
     }
     
@@ -798,7 +1225,8 @@
             loadDestinationsList(),
             loadProvincialDestinations(),
             loadWithDriverDurations(),
-            loadRateData()
+            loadRateData(),
+            loadDiscountSettings()
         ]);
         
         initializeServiceTypeToggle();
@@ -831,90 +1259,17 @@
         document.getElementById('closeDurationModalWD')?.addEventListener('click', () => closeModal('durationModalWD'));
         document.getElementById('cancelDurationBtnWD')?.addEventListener('click', () => closeModal('durationModalWD'));
         document.getElementById('durationFormWD')?.addEventListener('submit', (e) => { e.preventDefault(); addWithDriverDuration(); });
-    }
-    
-    async function addWithDriverDuration() {
-        const name = document.getElementById('durationNameWD').value.trim();
-        const hours = parseInt(document.getElementById('durationHoursWD').value);
         
-        if (!name || !hours || hours <= 0) {
-            showNotification('Duration name and valid hours are required', 'error');
-            return;
-        }
+        // Discount modal
+        document.getElementById('editDiscountBtnWD')?.addEventListener('click', () => openDiscountModal());
+        document.getElementById('closeDiscountModalWD')?.addEventListener('click', () => closeDiscountModal());
+        document.getElementById('cancelDiscountBtnWD')?.addEventListener('click', () => closeDiscountModal());
+        document.getElementById('discountFormWD')?.addEventListener('submit', saveGlobalDiscount);
         
-        try {
-            const response = await apiRequest(`${API_BASE_URL}/durations`, {
-                method: 'POST',
-                body: JSON.stringify({ name, hours })
-            });
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to add duration');
-            }
-            showNotification('Duration added');
-            closeModal('durationModalWD');
-            document.getElementById('durationNameWD').value = '';
-            document.getElementById('durationHoursWD').value = '';
-            await loadWithDriverDurations();
-        } catch (error) {
-            showNotification(error.message, 'error');
-        }
-    }
-    
-    async function toggleWithDriverDuration(durationKey) {
-        try {
-            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}/toggle`, { 
-                method: 'PATCH'
-            });
-            if (!response.ok) throw new Error('Failed to toggle duration');
-            const data = await response.json();
-            showNotification(data.message);
-            await loadWithDriverDurations();
-        } catch (error) {
-            showNotification('Failed to toggle duration', 'error');
-        }
-    }
-    
-    async function deleteWithDriverDuration(durationKey) {
-        const confirmed = await showConfirmModal('Delete Duration', 'Are you sure you want to delete this duration? This action cannot be undone.');
-        if (!confirmed) return;
-        
-        try {
-            const response = await apiRequest(`${API_BASE_URL}/durations/${durationKey}`, { 
-                method: 'DELETE'
-            });
-            if (!response.ok) throw new Error('Failed to delete duration');
-            showNotification('Duration deleted successfully');
-            await loadWithDriverDurations();
-        } catch (error) {
-            showNotification('Failed to delete duration', 'error');
-        }
-    }
-    
-    async function refreshWithDriverData() {
-        if (window.withDriverInitialized) {
-            await Promise.all([
-                loadDestinationsList(),
-                loadProvincialDestinations(),
-                loadWithDriverDurations(),
-                loadRateData()
-            ]);
-        }
-    }
-
-    async function toggleProvincialDestination(destinationKey) {
-        try {
-            const response = await apiRequest(`${API_BASE_URL}/provincial/destinations/${destinationKey}/toggle`, { 
-                method: 'PATCH'
-            });
-            if (!response.ok) throw new Error('Failed to toggle destination');
-            const data = await response.json();
-            showNotification(data.message);
-            await loadDestinationsList();
-            await loadProvincialDestinations();
-        } catch (error) {
-            showNotification('Failed to toggle destination', 'error');
-        }
+        // Close modals on outside click
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+        });
     }
     
     // Expose module globally
@@ -924,7 +1279,9 @@
         deleteDestination: deleteProvincialDestination,
         toggleDestination: toggleProvincialDestination,
         toggleDuration: toggleWithDriverDuration,
-        deleteDuration: deleteWithDriverDuration
+        deleteDuration: deleteWithDriverDuration,
+        openDiscountModal: openDiscountModal,
+        removeGlobalDiscount: removeGlobalDiscount
     };
     
     window.initializeWithDriver = initializeWithDriver;

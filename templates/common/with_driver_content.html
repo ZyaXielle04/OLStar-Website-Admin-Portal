@@ -48,6 +48,77 @@
     </div>
 </div>
 
+<!-- Discount Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Global Discount Settings</h3>
+        {% if session.get('role') == 'superadmin' %}
+        <button class="btn btn-secondary" id="editDiscountBtnWD" style="background-color: #f59e0b; color: white;">
+            <i class="fas fa-percent"></i> Manage Discount
+        </button>
+        {% endif %}
+    </div>
+    <div class="discount-container" id="discountContainerWD">
+        <div class="loading-placeholder">Loading discount settings...</div>
+    </div>
+    <div class="card-footer">
+        <small class="text-muted">
+            <i class="fas fa-info-circle"></i> 
+            Global discount applies to ALL rates (Metro Manila Regular, All-in, and Provincial packages).
+            Discount is calculated on the base rate.
+        </small>
+    </div>
+</div>
+
+<!-- Discount Modal -->
+<div id="discountModalWD" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Global Discount Settings</h3>
+            <button class="modal-close" id="closeDiscountModalWD">&times;</button>
+        </div>
+        <form id="discountFormWD">
+            <div class="form-group">
+                <label class="form-label">Discount Type</label>
+                <select id="discountTypeWD" class="form-input" required>
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed Amount (₱)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Discount Value</label>
+                <input type="number" id="discountValueWD" class="form-input" step="1" min="0" required>
+                <small id="discountValueHelpWD">For percentage: 1-100, For fixed: amount in pesos</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description (Optional)</label>
+                <input type="text" id="discountDescriptionWD" class="form-input" placeholder="e.g., Summer Sale 2024">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Valid From (Date &amp; Time)</label>
+                <input type="datetime-local" id="discountValidFromWD" class="form-input">
+                <small>When the discount starts (leave empty for immediate)</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Valid Until (Date &amp; Time)</label>
+                <input type="datetime-local" id="discountValidUntilWD" class="form-input">
+                <small>When the discount expires (leave empty for no expiration)</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" id="applyToAllWD" value="true">
+                    Apply to all existing rates
+                </label>
+                <small>This will apply the discount to all current rates immediately</small>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelDiscountBtnWD">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Discount</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- Rate Table Section - Metro Manila -->
 <div class="card" id="metroManilaCardWD">
     <div class="card-header">
