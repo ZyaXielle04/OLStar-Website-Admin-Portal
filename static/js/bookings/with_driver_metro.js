@@ -61,7 +61,7 @@ let currentDurationFilter = 'all';
 let bookingsCache = {
     data: null,
     timestamp: null,
-    cacheDuration: 30000, // 30 seconds cache
+    cacheDuration: 30000,
     isValid: function() {
         return this.data && this.timestamp && (Date.now() - this.timestamp) < this.cacheDuration;
     },
@@ -78,12 +78,10 @@ let bookingsCache = {
     }
 };
 
-// Save current scroll position
 function saveScrollPosition() {
     lastScrollPosition = window.scrollY;
 }
 
-// Restore scroll position
 function restoreScrollPosition() {
     if (lastScrollPosition > 0) {
         setTimeout(() => {
@@ -95,7 +93,6 @@ function restoreScrollPosition() {
     }
 }
 
-// Generate unique hash of current bookings (for change detection)
 function getBookingsHash(bookings) {
     return JSON.stringify(bookings.map(b => ({
         id: b.id,
@@ -104,7 +101,6 @@ function getBookingsHash(bookings) {
     })));
 }
 
-// Setup polling listener
 function setupPollingListener() {
     if (pollingInterval) {
         clearInterval(pollingInterval);
@@ -114,20 +110,17 @@ function setupPollingListener() {
         if (!isRefreshing && document.hasFocus()) {
             refreshBookingsSilently();
         }
-    }, 30000); // 30 seconds
+    }, 30000);
     
     console.log('Auto-refresh enabled (every 30 seconds)');
 }
 
-// Silent refresh without user notification (preserves scroll)
 async function refreshBookingsSilently() {
     isRefreshing = true;
     
     try {
-        // Save current scroll position before refresh
         saveScrollPosition();
         
-        // Check cache first
         if (bookingsCache.isValid()) {
             const cachedData = bookingsCache.get();
             const newHash = getBookingsHash(cachedData.bookings);
@@ -137,26 +130,28 @@ async function refreshBookingsSilently() {
                 allBookings = cachedData.bookings;
                 lastBookingIdsHash = newHash;
                 
-                // Update UI without full re-render if possible
                 updateStats();
                 updateStatusCounts();
                 
-                // Only re-render if necessary
                 if (needsReRender(cachedData.bookings)) {
                     renderBookingsCards();
                 } else {
-                    // Just update counts and badges without re-rendering cards
                     updateCardStatuses(cachedData.bookings);
                 }
                 
-                // Notify only for new bookings (but don't disrupt)
                 if (cachedData.bookings.length > oldCount) {
                     toastInfo(`${cachedData.bookings.length - oldCount} new booking(s) received!`, 'Update');
                 }
             }
         } else {
-            // Fetch fresh data
             const response = await apiRequest(`/api/common/with-driver-metro/bookings?status=all&_t=${Date.now()}`);
+            
+            if (response.status === 304) {
+                if (bookingsCache.data) {
+                    bookingsCache.timestamp = Date.now();
+                }
+                return;
+            }
             
             if (!response.ok) {
                 throw new Error('Failed to refresh');
@@ -165,7 +160,6 @@ async function refreshBookingsSilently() {
             const data = await response.json();
             
             if (data.success) {
-                // Update cache
                 bookingsCache.set(data);
                 
                 const newHash = getBookingsHash(data.bookings);
@@ -179,7 +173,6 @@ async function refreshBookingsSilently() {
                     updateStatusCounts();
                     renderBookingsCards();
                     
-                    // Optional: Notify only for new bookings
                     if (data.bookings.length > oldCount) {
                         toastInfo(`${data.bookings.length - oldCount} new booking(s) received!`, 'Update');
                     }
@@ -187,7 +180,6 @@ async function refreshBookingsSilently() {
             }
         }
         
-        // Restore scroll position after refresh
         restoreScrollPosition();
         
     } catch (error) {
@@ -197,9 +189,7 @@ async function refreshBookingsSilently() {
     }
 }
 
-// Check if UI needs full re-render
 function needsReRender(newBookings) {
-    // If status tab changed, need re-render
     const currentFilteredCount = allBookings.filter(b => {
         if (currentStatus === 'all') return true;
         return b.status === currentStatus;
@@ -210,7 +200,6 @@ function needsReRender(newBookings) {
         return b.status === currentStatus;
     }).length;
     
-    // If counts differ or search/filters active, re-render
     if (currentFilteredCount !== newFilteredCount) return true;
     if (currentSearchTerm) return true;
     if (currentDateFilter !== 'all') return true;
@@ -220,7 +209,6 @@ function needsReRender(newBookings) {
     return false;
 }
 
-// Update card statuses without full re-render (optimization)
 function updateCardStatuses(newBookings) {
     const bookingCards = document.querySelectorAll('.booking-card');
     
@@ -229,27 +217,22 @@ function updateCardStatuses(newBookings) {
         const updatedBooking = newBookings.find(b => b.id === bookingId);
         
         if (updatedBooking) {
-            // Update status badge
             const statusBadge = card.querySelector('.status-badge');
             if (statusBadge && updatedBooking.status !== allBookings.find(b => b.id === bookingId)?.status) {
                 const newStatusBadge = getStatusBadge(updatedBooking.status);
                 statusBadge.outerHTML = newStatusBadge;
             }
             
-            // Update payment badge
             const paymentBadge = card.querySelector('.payment-badge');
             if (paymentBadge && updatedBooking.paymentStatus !== allBookings.find(b => b.id === bookingId)?.paymentStatus) {
                 const newPaymentBadge = getPaymentStatusBadge(updatedBooking.paymentStatus);
                 paymentBadge.outerHTML = newPaymentBadge;
             }
             
-            // Update action buttons if status changed
             const actionButtons = card.querySelector('.card-actions');
             if (actionButtons && updatedBooking.status !== allBookings.find(b => b.id === bookingId)?.status) {
                 const newButtons = getCardActionButtons(updatedBooking);
                 actionButtons.innerHTML = newButtons;
-                
-                // Re-attach event listeners
                 attachCardActionListeners();
             }
         }
@@ -268,47 +251,45 @@ function stopPollingListener() {
 // GLOBAL VARIABLES
 // ============================================
 
-// DOM Elements
-const totalBookingsEl = document.getElementById('totalBookings');
-const todayBookingsEl = document.getElementById('todayBookings');
-const totalRevenueEl = document.getElementById('totalRevenue');
-const searchInput = document.getElementById('searchInput');
-const dateFilter = document.getElementById('dateFilter');
-const areaFilter = document.getElementById('areaFilter');
-const durationFilter = document.getElementById('durationFilter');
-const refreshBtn = document.getElementById('refreshBookingsBtn');
-const cardsContainer = document.getElementById('bookingsCardsContainer');
-const tableTitle = document.getElementById('tableTitle');
-const resultsCount = document.getElementById('resultsCount');
+const DOM_ELEMENTS = {
+    totalBookings: document.getElementById('totalBookings'),
+    todayBookings: document.getElementById('todayBookings'),
+    totalRevenue: document.getElementById('totalRevenue'),
+    searchInput: document.getElementById('searchInput'),
+    dateFilter: document.getElementById('dateFilter'),
+    areaFilter: document.getElementById('areaFilter'),
+    durationFilter: document.getElementById('durationFilter'),
+    refreshBtn: document.getElementById('refreshBookingsBtn'),
+    cardsContainer: document.getElementById('bookingsCardsContainer'),
+    tableTitle: document.getElementById('tableTitle'),
+    resultsCount: document.getElementById('resultsCount')
+};
 
-// Modal elements
-const viewBookingModal = document.getElementById('viewBookingModal');
-const assignDriverModal = document.getElementById('assignDriverModal');
-const startTripModal = document.getElementById('startTripModal');
-const completeTripModal = document.getElementById('completeTripModal');
-const cancelBookingModal = document.getElementById('cancelBookingModal');
-const reassignDriverModal = document.getElementById('reassignDriverModal');
-const bookingDetailsContainer = document.getElementById('bookingDetailsContainer');
-const driverSelect = document.getElementById('driverSelect');
-const vehicleSelect = document.getElementById('vehicleSelect');
-const reassignDriverSelect = document.getElementById('reassignDriverSelect');
-const reassignVehicleSelect = document.getElementById('reassignVehicleSelect');
-const selectedBookingId = document.getElementById('selectedBookingId');
-const reassignBookingId = document.getElementById('reassignBookingId');
-const startTripBookingId = document.getElementById('startTripBookingId');
-const completeTripBookingId = document.getElementById('completeTripBookingId');
-const cancelBookingId = document.getElementById('cancelBookingId');
-const cancelReason = document.getElementById('cancelReason');
-const completionNotes = document.getElementById('completionNotes');
-const assignmentNotes = document.getElementById('assignmentNotes');
-const estimatedDuration = document.getElementById('estimatedDuration');
-const reassignReason = document.getElementById('reassignReason');
+const MODAL_ELEMENTS = {
+    viewBooking: document.getElementById('viewBookingModal'),
+    assignDriver: document.getElementById('assignDriverModal'),
+    completeTrip: document.getElementById('completeTripModal'),
+    cancelBooking: document.getElementById('cancelBookingModal'),
+    reassignDriver: document.getElementById('reassignDriverModal'),
+    bookingDetails: document.getElementById('bookingDetailsContainer'),
+    driverSelect: document.getElementById('driverSelect'),
+    vehicleSelect: document.getElementById('vehicleSelect'),
+    reassignDriverSelect: document.getElementById('reassignDriverSelect'),
+    reassignVehicleSelect: document.getElementById('reassignVehicleSelect'),
+    selectedBookingId: document.getElementById('selectedBookingId'),
+    reassignBookingId: document.getElementById('reassignBookingId'),
+    completeTripBookingId: document.getElementById('completeTripBookingId'),
+    cancelBookingId: document.getElementById('cancelBookingId'),
+    cancelReason: document.getElementById('cancelReason'),
+    completionNotes: document.getElementById('completionNotes'),
+    assignmentNotes: document.getElementById('assignmentNotes'),
+    reassignReason: document.getElementById('reassignReason')
+};
 
-// Initialize page
 document.addEventListener('DOMContentLoaded', () => {
     loadBookings();
     setupEventListeners();
-    setupPollingListener(); // Use polling instead of Firebase
+    setupPollingListener();
 });
 
 window.addEventListener('beforeunload', () => {
@@ -316,7 +297,6 @@ window.addEventListener('beforeunload', () => {
 });
 
 function setupEventListeners() {
-    // Status tabs - save scroll before tab change
     document.querySelectorAll('.status-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             saveScrollPosition();
@@ -329,9 +309,8 @@ function setupEventListeners() {
         });
     });
 
-    // Search input with debounce
     let searchTimeout;
-    searchInput.addEventListener('input', (e) => {
+    DOM_ELEMENTS.searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
             saveScrollPosition();
@@ -341,74 +320,65 @@ function setupEventListeners() {
         }, 300);
     });
 
-    // Filters - save scroll before filter change
-    dateFilter.addEventListener('change', (e) => {
+    DOM_ELEMENTS.dateFilter.addEventListener('change', (e) => {
         saveScrollPosition();
         currentDateFilter = e.target.value;
         renderBookingsCards();
         restoreScrollPosition();
     });
     
-    areaFilter.addEventListener('change', (e) => {
+    DOM_ELEMENTS.areaFilter.addEventListener('change', (e) => {
         saveScrollPosition();
         currentAreaFilter = e.target.value;
         renderBookingsCards();
         restoreScrollPosition();
     });
     
-    durationFilter.addEventListener('change', (e) => {
+    DOM_ELEMENTS.durationFilter.addEventListener('change', (e) => {
         saveScrollPosition();
         currentDurationFilter = e.target.value;
         renderBookingsCards();
         restoreScrollPosition();
     });
 
-    refreshBtn.addEventListener('click', () => {
+    DOM_ELEMENTS.refreshBtn.addEventListener('click', () => {
         saveScrollPosition();
         loadBookings(true);
         toastInfo('Manually refreshed', 'Refresh');
         setTimeout(() => restoreScrollPosition(), 100);
     });
 
-    // Modal close buttons
     document.getElementById('closeViewBookingModal')?.addEventListener('click', () => {
-        viewBookingModal.style.display = 'none';
+        MODAL_ELEMENTS.viewBooking.style.display = 'none';
     });
     document.getElementById('closeModalFooterBtn')?.addEventListener('click', () => {
-        viewBookingModal.style.display = 'none';
+        MODAL_ELEMENTS.viewBooking.style.display = 'none';
     });
     document.getElementById('closeAssignDriverModal')?.addEventListener('click', () => {
-        assignDriverModal.style.display = 'none';
-    });
-    document.getElementById('closeStartTripModal')?.addEventListener('click', () => {
-        startTripModal.style.display = 'none';
+        MODAL_ELEMENTS.assignDriver.style.display = 'none';
     });
     document.getElementById('closeCompleteTripModal')?.addEventListener('click', () => {
-        completeTripModal.style.display = 'none';
+        MODAL_ELEMENTS.completeTrip.style.display = 'none';
     });
     document.getElementById('closeCancelBookingModal')?.addEventListener('click', () => {
-        cancelBookingModal.style.display = 'none';
+        MODAL_ELEMENTS.cancelBooking.style.display = 'none';
     });
     document.getElementById('closeReassignDriverModal')?.addEventListener('click', () => {
-        reassignDriverModal.style.display = 'none';
+        MODAL_ELEMENTS.reassignDriver.style.display = 'none';
     });
     document.getElementById('cancelAssignBtn')?.addEventListener('click', () => {
-        assignDriverModal.style.display = 'none';
-    });
-    document.getElementById('cancelStartTripBtn')?.addEventListener('click', () => {
-        startTripModal.style.display = 'none';
+        MODAL_ELEMENTS.assignDriver.style.display = 'none';
     });
     document.getElementById('cancelCompleteTripBtn')?.addEventListener('click', () => {
-        completeTripModal.style.display = 'none';
+        MODAL_ELEMENTS.completeTrip.style.display = 'none';
     });
     document.getElementById('cancelBookingBtn')?.addEventListener('click', () => {
-        cancelBookingModal.style.display = 'none';
+        MODAL_ELEMENTS.cancelBooking.style.display = 'none';
     });
     document.getElementById('cancelReassignBtn')?.addEventListener('click', () => {
-        reassignDriverModal.style.display = 'none';
+        MODAL_ELEMENTS.reassignDriver.style.display = 'none';
     });
 
-    // Close modals when clicking overlay
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
@@ -417,9 +387,7 @@ function setupEventListeners() {
         });
     });
 
-    // Form submissions
     document.getElementById('assignDriverForm')?.addEventListener('submit', handleAssignDriver);
-    document.getElementById('startTripForm')?.addEventListener('submit', handleStartTrip);
     document.getElementById('completeTripForm')?.addEventListener('submit', handleCompleteTrip);
     document.getElementById('cancelBookingForm')?.addEventListener('submit', handleCancelBooking);
     document.getElementById('reassignDriverForm')?.addEventListener('submit', handleReassignDriver);
@@ -428,20 +396,18 @@ function setupEventListeners() {
 function updateTableTitle() {
     const titles = {
         'unassigned': 'Unassigned Metro Point-to-Point Bookings',
-        'assigned': 'Assigned Metro Bookings (Ready for Pickup)',
-        'in_progress': 'In Progress Trips',
+        'assigned': 'Assigned Metro Bookings',
         'completed': 'Completed Metro Bookings',
         'cancelled': 'Cancelled Metro Bookings',
         'all': 'All Metro Point-to-Point Bookings'
     };
-    tableTitle.textContent = titles[currentStatus] || 'Metro Bookings';
+    DOM_ELEMENTS.tableTitle.textContent = titles[currentStatus] || 'Metro Bookings';
 }
 
 async function loadBookings(forceRefresh = false) {
     try {
         showLoadingState();
         
-        // Check cache first
         if (!forceRefresh && bookingsCache.isValid()) {
             const cachedData = bookingsCache.get();
             allBookings = cachedData.bookings;
@@ -461,9 +427,7 @@ async function loadBookings(forceRefresh = false) {
         const data = await response.json();
         
         if (data.success) {
-            // Update cache
             bookingsCache.set(data);
-            
             allBookings = data.bookings;
             lastBookingIdsHash = getBookingsHash(allBookings);
             updateStats();
@@ -479,13 +443,13 @@ async function loadBookings(forceRefresh = false) {
     } catch (error) {
         console.error('Error loading bookings:', error);
         toastError('Unable to load bookings. Please try again.', 'Connection Error');
-        cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-exclamation-triangle"></i> Error loading bookings. Please refresh.</div>`;
+        DOM_ELEMENTS.cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-exclamation-triangle"></i> Error loading bookings. Please refresh.</div>`;
     }
 }
 
 function showLoadingState() {
     if (allBookings.length === 0) {
-        cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-spinner fa-spin"></i> Loading metro bookings...</div>`;
+        DOM_ELEMENTS.cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-spinner fa-spin"></i> Loading metro bookings...</div>`;
     }
 }
 
@@ -495,7 +459,7 @@ function updateStats() {
         return b.status === currentStatus;
     });
     
-    totalBookingsEl.textContent = filteredByStatus.length;
+    DOM_ELEMENTS.totalBookings.textContent = filteredByStatus.length;
     
     const today = new Date().toISOString().split('T')[0];
     const todayBookingsCount = filteredByStatus.filter(booking => {
@@ -512,12 +476,12 @@ function updateStats() {
         }
         return false;
     }).length;
-    todayBookingsEl.textContent = todayBookingsCount;
+    DOM_ELEMENTS.todayBookings.textContent = todayBookingsCount;
     
     let totalRevenue = filteredByStatus
         .filter(b => b.paymentStatus === 'paid')
         .reduce((sum, b) => sum + parseFloat(b.amount || 0), 0);
-    totalRevenueEl.textContent = `₱${totalRevenue.toLocaleString()}`;
+    DOM_ELEMENTS.totalRevenue.textContent = `₱${totalRevenue.toLocaleString()}`;
 }
 
 async function updateStatusCounts() {
@@ -528,7 +492,6 @@ async function updateStatusCounts() {
         if (data.success) {
             document.getElementById('unassignedCount').textContent = data.counts.unassigned || 0;
             document.getElementById('assignedCount').textContent = data.counts.assigned || 0;
-            document.getElementById('inProgressCount').textContent = data.counts.in_progress || 0;
             document.getElementById('completedCount').textContent = data.counts.completed || 0;
             document.getElementById('cancelledCount').textContent = data.counts.cancelled || 0;
             document.getElementById('allCount').textContent = data.counts.all || 0;
@@ -663,14 +626,14 @@ function renderBookingsCards() {
     filteredBookings = filteredBookings.filter(booking => filterByArea(booking));
     filteredBookings = filteredBookings.filter(booking => filterByDuration(booking));
     
-    resultsCount.textContent = filteredBookings.length;
+    DOM_ELEMENTS.resultsCount.textContent = filteredBookings.length;
     
     if (filteredBookings.length === 0) {
-        cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-inbox"></i> No ${currentStatus} metro bookings found</div>`;
+        DOM_ELEMENTS.cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-inbox"></i> No ${currentStatus} metro bookings found</div>`;
         return;
     }
     
-    cardsContainer.innerHTML = filteredBookings.map(booking => renderBookingCard(booking)).join('');
+    DOM_ELEMENTS.cardsContainer.innerHTML = filteredBookings.map(booking => renderBookingCard(booking)).join('');
     attachCardActionListeners();
 }
 
@@ -752,9 +715,7 @@ function getCardActionButtons(booking) {
     if (booking.status === 'unassigned') {
         return `${viewBtn}<button class="card-action-btn btn-assign-card" data-action="assign" data-booking-id="${booking.id}">👨‍✈️ Assign Driver</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else if (booking.status === 'assigned') {
-        return `${viewBtn}<button class="card-action-btn btn-start-card" data-action="start" data-booking-id="${booking.id}">🚀 Start Trip</button><button class="card-action-btn btn-reassign-card" data-action="reassign" data-booking-id="${booking.id}">🔄 Reassign</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
-    } else if (booking.status === 'in_progress') {
-        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete Trip</button>`;
+        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete</button><button class="card-action-btn btn-reassign-card" data-action="reassign" data-booking-id="${booking.id}">🔄 Reassign</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else {
         return viewBtn;
     }
@@ -764,7 +725,6 @@ function getStatusBadge(status) {
     const badges = {
         'unassigned': '<span class="status-badge status-unassigned">⏳ Unassigned</span>',
         'assigned': '<span class="status-badge status-assigned">✓ Assigned</span>',
-        'in_progress': '<span class="status-badge status-in_progress">🚀 In Progress</span>',
         'completed': '<span class="status-badge status-completed">✅ Completed</span>',
         'cancelled': '<span class="status-badge status-cancelled">❌ Cancelled</span>'
     };
@@ -818,9 +778,6 @@ function attachCardActionListeners() {
     document.querySelectorAll('[data-action="assign"]').forEach(btn => {
         btn.addEventListener('click', () => openAssignDriverModal(btn.dataset.bookingId));
     });
-    document.querySelectorAll('[data-action="start"]').forEach(btn => {
-        btn.addEventListener('click', () => openStartTripModal(btn.dataset.bookingId));
-    });
     document.querySelectorAll('[data-action="complete"]').forEach(btn => {
         btn.addEventListener('click', () => openCompleteTripModal(btn.dataset.bookingId));
     });
@@ -837,8 +794,8 @@ async function viewBookingDetails(bookingId) {
         const response = await apiRequest(`/api/common/with-driver-metro/bookings/${bookingId}`);
         const data = await response.json();
         if (data.success) {
-            bookingDetailsContainer.innerHTML = renderBookingDetails(data.booking);
-            viewBookingModal.style.display = 'flex';
+            MODAL_ELEMENTS.bookingDetails.innerHTML = renderBookingDetails(data.booking);
+            MODAL_ELEMENTS.viewBooking.style.display = 'flex';
         } else {
             toastError('Failed to load booking details', 'Error');
         }
@@ -913,22 +870,12 @@ function renderBookingDetails(booking) {
             </div>
             ` : ''}
             
-            ${booking.trip_started_at ? `
-            <div class="details-section">
-                <h4>🚀 Trip Progress</h4>
-                <div class="details-grid">
-                    <div class="detail-item"><label>Started At:</label><span>${new Date(booking.trip_started_at).toLocaleString()}</span></div>
-                    <div class="detail-item"><label>Start Location:</label><span>${escapeHtml(booking.trip_start_location || 'N/A')}</span></div>
-                </div>
-            </div>
-            ` : ''}
-            
             ${booking.completed_at ? `
             <div class="details-section">
                 <h4>✅ Completion Details</h4>
                 <div class="details-grid">
                     <div class="detail-item"><label>Completed At:</label><span>${new Date(booking.completed_at).toLocaleString()}</span></div>
-                    <div class="detail-item"><label>Actual Duration:</label><span>${escapeHtml(booking.actual_duration || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Completion Notes:</label><span>${escapeHtml(booking.completion_notes || 'N/A')}</span></div>
                 </div>
             </div>
             ` : ''}
@@ -938,7 +885,6 @@ function renderBookingDetails(booking) {
 
 async function openAssignDriverModal(bookingId) {
     try {
-        // First, get the booking details to know the vehicle type
         const bookingResponse = await apiRequest(`/api/common/with-driver-metro/bookings/${bookingId}`);
         const bookingData = await bookingResponse.json();
         
@@ -948,9 +894,8 @@ async function openAssignDriverModal(bookingId) {
         }
         
         const booking = bookingData.booking;
-        const requiredVehicleType = (booking.vehicleType || booking.vehicle_type || 'sedan').toUpperCase();
+        const requiredVehicleType = (booking.vehicleType || 'sedan').toUpperCase();
         
-        // Show the vehicle requirement banner
         const banner = document.getElementById('vehicleRequirementBanner');
         const requiredText = document.getElementById('requiredVehicleTypeText');
         const vehicleTypeHint = document.getElementById('vehicleTypeHint');
@@ -964,17 +909,11 @@ async function openAssignDriverModal(bookingId) {
             vehicleTypeHint.innerHTML = `(filtered by type: ${requiredVehicleType})`;
         }
         
-        // Load drivers (always all available drivers)
         await loadDrivers();
-        
-        // Load vehicles filtered by the required type
         await loadVehiclesByType(requiredVehicleType.toLowerCase());
         
-        // Store the booking ID
-        selectedBookingId.value = bookingId;
-        
-        // Show the modal
-        assignDriverModal.style.display = 'flex';
+        MODAL_ELEMENTS.selectedBookingId.value = bookingId;
+        MODAL_ELEMENTS.assignDriver.style.display = 'flex';
         
     } catch (error) {
         console.error('Error opening assign modal:', error);
@@ -984,32 +923,31 @@ async function openAssignDriverModal(bookingId) {
 
 async function loadVehiclesByType(vehicleType) {
     try {
-        // Pass the vehicle type as a query parameter
         const response = await apiRequest(`/api/common/with-driver-metro/vehicles/available?type=${encodeURIComponent(vehicleType)}`);
         const data = await response.json();
         
         if (data.success && data.vehicles && data.vehicles.length > 0) {
-            vehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
-            reassignVehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
+            MODAL_ELEMENTS.vehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
+            MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
             data.vehicles.forEach(vehicle => {
                 const option = document.createElement('option');
                 option.value = vehicle.id;
                 option.textContent = `${vehicle.vehicle_name} - ${vehicle.plate_number} (${vehicle.type})`;
-                vehicleSelect.appendChild(option);
+                MODAL_ELEMENTS.vehicleSelect.appendChild(option);
                 const option2 = document.createElement('option');
                 option2.value = vehicle.id;
                 option2.textContent = `${vehicle.vehicle_name} - ${vehicle.plate_number} (${vehicle.type})`;
-                reassignVehicleSelect.appendChild(option2);
+                MODAL_ELEMENTS.reassignVehicleSelect.appendChild(option2);
             });
         } else {
-            vehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
-            reassignVehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
+            MODAL_ELEMENTS.vehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
+            MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
             toastWarning(`No ${vehicleType} vehicles available for assignment`, 'Vehicle Unavailable');
         }
     } catch (error) {
         console.error('Error loading vehicles:', error);
-        vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
-        reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+        MODAL_ELEMENTS.vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+        MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
         toastError('Failed to load vehicles. Please try again.', 'Error');
     }
 }
@@ -1020,68 +958,37 @@ async function loadDrivers() {
         const data = await response.json();
         
         if (data.success && data.drivers && data.drivers.length > 0) {
-            driverSelect.innerHTML = '<option value="">Choose Driver</option>';
-            reassignDriverSelect.innerHTML = '<option value="">Choose Driver</option>';
+            MODAL_ELEMENTS.driverSelect.innerHTML = '<option value="">Choose Driver</option>';
+            MODAL_ELEMENTS.reassignDriverSelect.innerHTML = '<option value="">Choose Driver</option>';
             data.drivers.forEach(driver => {
                 const option = document.createElement('option');
                 option.value = driver.id;
                 option.textContent = driver.name;
-                driverSelect.appendChild(option);
+                MODAL_ELEMENTS.driverSelect.appendChild(option);
                 const option2 = document.createElement('option');
                 option2.value = driver.id;
                 option2.textContent = driver.name;
-                reassignDriverSelect.appendChild(option2);
+                MODAL_ELEMENTS.reassignDriverSelect.appendChild(option2);
             });
         } else {
-            driverSelect.innerHTML = '<option value="">No drivers available</option>';
-            reassignDriverSelect.innerHTML = '<option value="">No drivers available</option>';
+            MODAL_ELEMENTS.driverSelect.innerHTML = '<option value="">No drivers available</option>';
+            MODAL_ELEMENTS.reassignDriverSelect.innerHTML = '<option value="">No drivers available</option>';
             toastWarning('No drivers available for assignment', 'Attention');
         }
     } catch (error) {
         console.error('Error loading drivers:', error);
-        driverSelect.innerHTML = '<option value="">Error loading drivers</option>';
-        reassignDriverSelect.innerHTML = '<option value="">Error loading drivers</option>';
+        MODAL_ELEMENTS.driverSelect.innerHTML = '<option value="">Error loading drivers</option>';
+        MODAL_ELEMENTS.reassignDriverSelect.innerHTML = '<option value="">Error loading drivers</option>';
         toastError('Failed to load drivers. Please try again.', 'Error');
-    }
-}
-
-async function loadVehicles() {
-    try {
-        const response = await apiRequest('/api/common/with-driver-metro/vehicles/available');
-        const data = await response.json();
-        
-        if (data.success && data.vehicles && data.vehicles.length > 0) {
-            vehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
-            reassignVehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
-            data.vehicles.forEach(vehicle => {
-                const option = document.createElement('option');
-                option.value = vehicle.id;
-                option.textContent = `${vehicle.vehicle_name} - ${vehicle.plate_number}`;
-                vehicleSelect.appendChild(option);
-                const option2 = document.createElement('option');
-                option2.value = vehicle.id;
-                option2.textContent = `${vehicle.vehicle_name} - ${vehicle.plate_number}`;
-                reassignVehicleSelect.appendChild(option2);
-            });
-        } else {
-            vehicleSelect.innerHTML = '<option value="">No vehicles available</option>';
-            reassignVehicleSelect.innerHTML = '<option value="">No vehicles available</option>';
-            toastWarning('No vehicles available for assignment', 'Attention');
-        }
-    } catch (error) {
-        console.error('Error loading vehicles:', error);
-        vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
-        reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
-        toastError('Failed to load vehicles. Please try again.', 'Error');
     }
 }
 
 async function handleAssignDriver(e) {
     e.preventDefault();
-    const bookingId = selectedBookingId.value;
-    const driverId = driverSelect.value;
-    const vehicleId = vehicleSelect.value;
-    const notes = assignmentNotes.value;
+    const bookingId = MODAL_ELEMENTS.selectedBookingId.value;
+    const driverId = MODAL_ELEMENTS.driverSelect.value;
+    const vehicleId = MODAL_ELEMENTS.vehicleSelect.value;
+    const notes = MODAL_ELEMENTS.assignmentNotes.value;
     
     if (!driverId || !vehicleId) {
         toastError('Please select both driver and vehicle', 'Validation Error');
@@ -1096,22 +1003,17 @@ async function handleAssignDriver(e) {
     try {
         const response = await apiRequest(`/api/common/with-driver-metro/bookings/${bookingId}/assign`, {
             method: 'POST',
-            body: JSON.stringify({ 
-                driver_id: driverId, 
-                vehicle_id: vehicleId, 
-                assignment_notes: notes 
-            })
+            body: JSON.stringify({ driver_id: driverId, vehicle_id: vehicleId, assignment_notes: notes })
         });
         
         const data = await response.json();
         
         if (data.success) {
             toastSuccess('Driver assigned successfully!', 'Assignment Complete');
-            assignDriverModal.style.display = 'none';
-            assignmentNotes.value = '';
-            driverSelect.value = '';
-            vehicleSelect.value = '';
-            // Refresh data after assignment
+            MODAL_ELEMENTS.assignDriver.style.display = 'none';
+            MODAL_ELEMENTS.assignmentNotes.value = '';
+            MODAL_ELEMENTS.driverSelect.value = '';
+            MODAL_ELEMENTS.vehicleSelect.value = '';
             loadBookings(true);
         } else {
             toastError(data.message || 'Failed to assign driver', 'Assignment Failed');
@@ -1125,70 +1027,15 @@ async function handleAssignDriver(e) {
     }
 }
 
-function openStartTripModal(bookingId) {
-    startTripBookingId.value = bookingId;
-    startTripModal.style.display = 'flex';
-}
-
-async function handleStartTrip(e) {
-    e.preventDefault();
-    const bookingId = startTripBookingId.value;
-    const startLocation = document.getElementById('startLocation').value;
-    const tripNotes = document.getElementById('tripNotes').value;
-    
-    if (!startLocation) {
-        toastError('Please confirm starting location', 'Validation Error');
-        return;
-    }
-    
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
-    submitBtn.disabled = true;
-    
-    try {
-        const response = await apiRequest(`/api/common/with-driver-metro/bookings/${bookingId}/start-trip`, {
-            method: 'POST',
-            body: JSON.stringify({ start_location: startLocation, trip_notes: tripNotes })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            toastSuccess('Trip started successfully!', 'Trip Started');
-            startTripModal.style.display = 'none';
-            document.getElementById('startLocation').value = '';
-            document.getElementById('tripNotes').value = '';
-            // Refresh data after starting trip
-            loadBookings(true);
-        } else {
-            toastError(data.message || 'Failed to start trip', 'Error');
-        }
-    } catch (error) {
-        console.error('Error starting trip:', error);
-        toastError('Failed to start trip', 'Error');
-    } finally {
-        submitBtn.innerHTML = originalBtnText;
-        submitBtn.disabled = false;
-    }
-}
-
 function openCompleteTripModal(bookingId) {
-    completeTripBookingId.value = bookingId;
-    completeTripModal.style.display = 'flex';
+    MODAL_ELEMENTS.completeTripBookingId.value = bookingId;
+    MODAL_ELEMENTS.completeTrip.style.display = 'flex';
 }
 
 async function handleCompleteTrip(e) {
     e.preventDefault();
-    const bookingId = completeTripBookingId.value;
-    const endLocation = document.getElementById('endLocation').value;
-    const actualDuration = document.getElementById('actualDuration').value;
-    const notes = completionNotes.value;
-    
-    if (!endLocation) {
-        toastError('Please confirm drop-off location', 'Validation Error');
-        return;
-    }
+    const bookingId = MODAL_ELEMENTS.completeTripBookingId.value;
+    const notes = MODAL_ELEMENTS.completionNotes.value;
     
     const submitBtn = e.target.querySelector('button[type="submit"]');
     const originalBtnText = submitBtn.innerHTML;
@@ -1198,29 +1045,22 @@ async function handleCompleteTrip(e) {
     try {
         const response = await apiRequest(`/api/common/with-driver-metro/bookings/${bookingId}/complete`, {
             method: 'POST',
-            body: JSON.stringify({ 
-                end_location: endLocation, 
-                actual_duration: actualDuration,
-                completion_notes: notes 
-            })
+            body: JSON.stringify({ completion_notes: notes })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            toastSuccess('Trip completed successfully!', 'Trip Complete');
-            completeTripModal.style.display = 'none';
-            document.getElementById('endLocation').value = '';
-            document.getElementById('actualDuration').value = '';
-            completionNotes.value = '';
-            // Refresh data after completing trip
+            toastSuccess('Booking completed successfully!', 'Complete');
+            MODAL_ELEMENTS.completeTrip.style.display = 'none';
+            MODAL_ELEMENTS.completionNotes.value = '';
             loadBookings(true);
         } else {
-            toastError(data.message || 'Failed to complete trip', 'Error');
+            toastError(data.message || 'Failed to complete booking', 'Error');
         }
     } catch (error) {
-        console.error('Error completing trip:', error);
-        toastError('Failed to complete trip', 'Error');
+        console.error('Error completing booking:', error);
+        toastError('Failed to complete booking', 'Error');
     } finally {
         submitBtn.innerHTML = originalBtnText;
         submitBtn.disabled = false;
@@ -1228,15 +1068,15 @@ async function handleCompleteTrip(e) {
 }
 
 function openCancelBookingModal(bookingId) {
-    cancelBookingId.value = bookingId;
-    cancelReason.value = '';
-    cancelBookingModal.style.display = 'flex';
+    MODAL_ELEMENTS.cancelBookingId.value = bookingId;
+    MODAL_ELEMENTS.cancelReason.value = '';
+    MODAL_ELEMENTS.cancelBooking.style.display = 'flex';
 }
 
 async function handleCancelBooking(e) {
     e.preventDefault();
-    const bookingId = cancelBookingId.value;
-    const reason = cancelReason.value;
+    const bookingId = MODAL_ELEMENTS.cancelBookingId.value;
+    const reason = MODAL_ELEMENTS.cancelReason.value;
     
     if (!reason) {
         toastError('Please provide a cancellation reason', 'Validation Error');
@@ -1258,9 +1098,8 @@ async function handleCancelBooking(e) {
         
         if (data.success) {
             toastSuccess('Booking cancelled successfully!', 'Cancelled');
-            cancelBookingModal.style.display = 'none';
-            cancelReason.value = '';
-            // Refresh data after cancellation
+            MODAL_ELEMENTS.cancelBooking.style.display = 'none';
+            MODAL_ELEMENTS.cancelReason.value = '';
             loadBookings(true);
         } else {
             toastError(data.message || 'Failed to cancel booking', 'Error');
@@ -1276,7 +1115,6 @@ async function handleCancelBooking(e) {
 
 async function openReassignDriverModal(bookingId) {
     try {
-        // Get booking details to know vehicle type
         const bookingResponse = await apiRequest(`/api/common/with-driver-metro/bookings/${bookingId}`);
         const bookingData = await bookingResponse.json();
         
@@ -1286,14 +1124,14 @@ async function openReassignDriverModal(bookingId) {
         }
         
         const booking = bookingData.booking;
-        const requiredVehicleType = (booking.vehicleType || booking.vehicle_type || 'sedan').toLowerCase();
+        const requiredVehicleType = (booking.vehicleType || 'sedan').toLowerCase();
         
         await loadDrivers();
         await loadVehiclesForReassign(requiredVehicleType);
         
-        reassignBookingId.value = bookingId;
-        reassignReason.value = '';
-        reassignDriverModal.style.display = 'flex';
+        MODAL_ELEMENTS.reassignBookingId.value = bookingId;
+        MODAL_ELEMENTS.reassignReason.value = '';
+        MODAL_ELEMENTS.reassignDriver.style.display = 'flex';
         
     } catch (error) {
         console.error('Error opening reassign modal:', error);
@@ -1307,29 +1145,29 @@ async function loadVehiclesForReassign(vehicleType) {
         const data = await response.json();
         
         if (data.success && data.vehicles && data.vehicles.length > 0) {
-            reassignVehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
+            MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
             data.vehicles.forEach(vehicle => {
                 const option = document.createElement('option');
                 option.value = vehicle.id;
                 option.textContent = `${vehicle.vehicle_name} - ${vehicle.plate_number} (${vehicle.type})`;
-                reassignVehicleSelect.appendChild(option);
+                MODAL_ELEMENTS.reassignVehicleSelect.appendChild(option);
             });
         } else {
-            reassignVehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
+            MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
             toastWarning(`No ${vehicleType} vehicles available for reassignment`, 'Vehicle Unavailable');
         }
     } catch (error) {
         console.error('Error loading vehicles for reassign:', error);
-        reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+        MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
     }
 }
 
 async function handleReassignDriver(e) {
     e.preventDefault();
-    const bookingId = reassignBookingId.value;
-    const driverId = reassignDriverSelect.value;
-    const vehicleId = reassignVehicleSelect.value;
-    const reason = reassignReason.value;
+    const bookingId = MODAL_ELEMENTS.reassignBookingId.value;
+    const driverId = MODAL_ELEMENTS.reassignDriverSelect.value;
+    const vehicleId = MODAL_ELEMENTS.reassignVehicleSelect.value;
+    const reason = MODAL_ELEMENTS.reassignReason.value;
     
     if (!driverId || !vehicleId) {
         toastError('Please select both driver and vehicle', 'Validation Error');
@@ -1360,11 +1198,10 @@ async function handleReassignDriver(e) {
         
         if (data.success) {
             toastSuccess('Driver reassigned successfully!', 'Reassignment Complete');
-            reassignDriverModal.style.display = 'none';
-            reassignReason.value = '';
-            reassignDriverSelect.value = '';
-            reassignVehicleSelect.value = '';
-            // Refresh data after reassignment
+            MODAL_ELEMENTS.reassignDriver.style.display = 'none';
+            MODAL_ELEMENTS.reassignReason.value = '';
+            MODAL_ELEMENTS.reassignDriverSelect.value = '';
+            MODAL_ELEMENTS.reassignVehicleSelect.value = '';
             loadBookings(true);
         } else {
             toastError(data.message || 'Failed to reassign driver', 'Reassignment Failed');

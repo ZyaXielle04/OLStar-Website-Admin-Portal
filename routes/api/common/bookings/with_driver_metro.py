@@ -13,7 +13,7 @@ from backend.decorators import login_required_api, role_required_api
 with_driver_metro_bp = Blueprint('with_driver_metro', __name__)
 
 # Constants
-SERVICE_TYPE = 'withDriverMetro'  # Booking type identifier
+SERVICE_TYPE = 'withDriverMetro'
 PH_TIMEZONE = pytz.timezone('Asia/Manila')
 
 # Configure logging
@@ -89,16 +89,13 @@ def get_all_metro_bookings():
         
         bookings = []
         for booking_id, booking_data in pending_data.items():
-            # Check for both possible service type identifiers
             booking_type = booking_data.get('bookingType') or booking_data.get('serviceType')
             if booking_type == 'withDriverMetro' or booking_data.get('package') in ['all-inclusive', 'point-to-point']:
                 booking_data['id'] = booking_id
-                # Ensure status field exists
                 if 'status' not in booking_data:
                     booking_data['status'] = 'unassigned'
                 bookings.append(booking_data)
         
-        # Sort by travel date
         bookings.sort(key=lambda x: x.get('travelDate', ''), reverse=False)
         return bookings
         
@@ -131,7 +128,6 @@ def get_metro_bookings_by_status(status_filter=None):
                 booking_data['status'] = 'unassigned'
             bookings.append(booking_data)
         
-        # Sort by travel date
         bookings.sort(key=lambda x: x.get('travelDate', ''), reverse=False)
         return bookings
         
@@ -159,12 +155,10 @@ def get_booking_by_id(booking_id):
 
 def format_booking_response(booking):
     """Format booking data for API response"""
-    # Parse travel date
     travel_date = booking.get('travelDate', '')
     if travel_date and '-' in travel_date:
         parts = travel_date.split('-')
         if len(parts) == 3 and len(parts[2]) == 4:
-            # Convert from MM-DD-YYYY to YYYY-MM-DD for consistency
             travel_date = f"{parts[2]}-{parts[0]}-{parts[1]}"
     
     return {
@@ -198,16 +192,10 @@ def format_booking_response(booking):
         'assigned_by': booking.get('assigned_by'),
         'assigned_by_name': booking.get('assigned_by_name'),
         'assignment_notes': booking.get('assignment_notes'),
-        'estimated_duration': booking.get('estimated_duration'),
-        'trip_started_at': booking.get('trip_started_at'),
-        'trip_start_location': booking.get('trip_start_location'),
-        'trip_notes': booking.get('trip_notes'),
         'completed_at': booking.get('completed_at'),
         'completed_by': booking.get('completed_by'),
         'completed_by_name': booking.get('completed_by_name'),
         'completion_notes': booking.get('completion_notes'),
-        'actual_duration': booking.get('actual_duration'),
-        'dropoff_confirmation': booking.get('dropoff_confirmation'),
         'cancelled_at': booking.get('cancelled_at'),
         'cancelled_by': booking.get('cancelled_by'),
         'cancelled_by_name': booking.get('cancelled_by_name'),
@@ -216,43 +204,6 @@ def format_booking_response(booking):
         'reassigned_by': booking.get('reassigned_by'),
         'reassign_reason': booking.get('reassign_reason')
     }
-
-def extract_area_from_location(location):
-    """Extract city/area from location string for filtering"""
-    if not location:
-        return None
-    
-    location_lower = location.lower()
-    areas = {
-        'manila': ['manila', 'ermita', 'malate', 'binondo', 'intramuros', 'sampaloc', 'pacow',
-                   'paco', 'pandacan', 'port area', 'san miguel', 'santa ana', 'santa cruz'],
-        'quezon_city': ['quezon city', 'qc', 'diliman', 'cubao', 'commonwealth', 'fairview',
-                        'novaliches', 'project', 'katipunan', 'eastwood'],
-        'makati': ['makati', 'ayala', 'rockwell', 'bel-air', 'guadalupe', 'poblacion', 'salcedo',
-                   'legaspi', 'san antonio'],
-        'taguig': ['taguig', 'bgc', 'bonifacio global city', 'mckinley', 'fort bonifacio',
-                   'market market', 'serendra'],
-        'pasay': ['pasay', 'moa', 'mall of asia', 'naia', 'airport', 'tramo', 'taft'],
-        'paranaque': ['paranaque', 'bf homes', 'sucat', 'baclaran', 'don bosco', 'sun valley'],
-        'las_pinas': ['las pinas', 'las piñas', 'alabang', 'zapote', 'bf resort'],
-        'muntinlupa': ['muntinlupa', 'alabang', 'filinvest', 'festival mall', 'tunasan'],
-        'pasig': ['pasig', 'ortigas', 'cainta', 'rosario', 'bagong ilog', 'kapasigan'],
-        'mandaluyong': ['mandaluyong', 'shaw', 'boni', 'edsa', 'barangka'],
-        'marikina': ['marikina', 'concepcion', 'sta elena', 'nangka', 'parang'],
-        'valenzuela': ['valenzuela', 'karuhatan', 'malanday', 'maysan'],
-        'caloocan': ['caloocan', 'monumento', 'sangandaan', 'bagong barrio'],
-        'malabon': ['malabon', 'hulo', 'potrero', 'tinajeros'],
-        'navotas': ['navotas', 'north bay', 'tangos'],
-        'san_juan': ['san juan', 'greenhills', 'pinaglabanan'],
-        'pateros': ['pateros', 'aguho', 'martinez']
-    }
-    
-    for area, keywords in areas.items():
-        for keyword in keywords:
-            if keyword in location_lower:
-                return area
-    
-    return 'other'
 
 # ============================================
 # API ROUTES WITH CACHING & POLLING OPTIMIZATIONS
@@ -266,8 +217,6 @@ def get_metro_bookings():
     """Get metro point-to-point bookings with conditional GET support for polling"""
     try:
         status = request.args.get('status', 'unassigned')
-        
-        # Get the If-None-Match header for cache validation
         if_none_match = request.headers.get('If-None-Match')
         
         if status == 'all':
@@ -276,11 +225,8 @@ def get_metro_bookings():
             bookings = get_metro_bookings_by_status(status)
         
         formatted_bookings = [format_booking_response(b) for b in bookings]
-        
-        # Generate ETag based on bookings data
         etag = hashlib.md5(json.dumps(formatted_bookings, sort_keys=True).encode()).hexdigest()
         
-        # If ETag matches, return 304 Not Modified (saves bandwidth)
         if if_none_match and if_none_match.strip('"') == etag:
             return '', 304
         
@@ -315,7 +261,6 @@ def get_metro_counts():
         counts = {
             'unassigned': sum(1 for b in all_bookings if b.get('status') == 'unassigned'),
             'assigned': sum(1 for b in all_bookings if b.get('status') == 'assigned'),
-            'in_progress': sum(1 for b in all_bookings if b.get('status') == 'in_progress'),
             'completed': sum(1 for b in all_bookings if b.get('status') == 'completed'),
             'cancelled': sum(1 for b in all_bookings if b.get('status') == 'cancelled'),
             'all': len(all_bookings)
@@ -364,31 +309,27 @@ def assign_driver_to_metro_booking(booking_id):
             return jsonify({'success': False, 'message': 'Booking not found'}), 404
         
         current_status = booking_data.get('status', 'unassigned')
-        if current_status not in ['unassigned', 'assigned']:
+        if current_status != 'unassigned':
             return jsonify({'success': False, 'message': f'Booking status is {current_status}. Cannot assign.'}), 400
         
-        # Get driver details
         driver_ref = db.reference(f'users/{driver_id}')
         driver_data = driver_ref.get()
         
         if not driver_data:
             return jsonify({'success': False, 'message': 'Driver not found'}), 404
         
-        # Get vehicle details
         vehicle_ref = db.reference(f'transportUnits/{vehicle_id}')
         vehicle_data = vehicle_ref.get()
         
         if not vehicle_data:
             return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
         
-        # Update the booking
         update_data = {
             'status': 'assigned',
             'assigned_driver': {
                 'id': driver_id,
                 'name': driver_data.get('fullName', 'N/A'),
-                'contact': driver_data.get('contactNumber', 'N/A'),
-                'license_number': driver_data.get('licenseNumber', 'No License')
+                'contact': driver_data.get('contactNumber', 'N/A')
             },
             'assigned_vehicle': {
                 'id': vehicle_id,
@@ -412,18 +353,14 @@ def assign_driver_to_metro_booking(booking_id):
         print(f"Error assigning driver: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@with_driver_metro_bp.route('/common/with-driver-metro/bookings/<booking_id>/start-trip', methods=['POST'])
+@with_driver_metro_bp.route('/common/with-driver-metro/bookings/<booking_id>/complete', methods=['POST'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
-def start_metro_trip(booking_id):
-    """Start a trip - updates status to 'in_progress'"""
+def complete_metro_booking(booking_id):
+    """Mark a booking as completed - updates status to 'completed'"""
     try:
         data = request.get_json()
-        start_location = data.get('start_location', '')
-        trip_notes = data.get('trip_notes', '')
-        
-        if not start_location:
-            return jsonify({'success': False, 'message': 'Starting location confirmation is required'}), 400
+        completion_notes = data.get('completion_notes', '')
         
         booking_ref = db.reference(f'/pendingBooking/{booking_id}')
         booking_data = booking_ref.get()
@@ -432,53 +369,10 @@ def start_metro_trip(booking_id):
             return jsonify({'success': False, 'message': 'Booking not found'}), 404
         
         if booking_data.get('status') != 'assigned':
-            return jsonify({'success': False, 'message': 'Only assigned bookings can be started'}), 400
-        
-        update_data = {
-            'status': 'in_progress',
-            'trip_started_at': datetime.now(PH_TIMEZONE).isoformat(),
-            'trip_start_location': start_location,
-            'trip_notes': trip_notes,
-            'started_by': session.get('user_id'),
-            'started_by_name': session.get('display_name', session.get('email'))
-        }
-        
-        booking_ref.update(update_data)
-        invalidate_cache()
-        
-        return jsonify({'success': True, 'message': 'Trip started successfully'}), 200
-        
-    except Exception as e:
-        print(f"Error starting trip: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-@with_driver_metro_bp.route('/common/with-driver-metro/bookings/<booking_id>/complete', methods=['POST'])
-@login_required_api
-@role_required_api(['superadmin', 'admin'])
-def complete_metro_booking(booking_id):
-    """Complete a trip - updates status to 'completed'"""
-    try:
-        data = request.get_json()
-        end_location = data.get('end_location', '')
-        actual_duration = data.get('actual_duration', '')
-        completion_notes = data.get('completion_notes', '')
-        
-        if not end_location:
-            return jsonify({'success': False, 'message': 'Drop-off confirmation is required'}), 400
-        
-        booking_ref = db.reference(f'/pendingBooking/{booking_id}')
-        booking_data = booking_ref.get()
-        
-        if not booking_data:
-            return jsonify({'success': False, 'message': 'Booking not found'}), 404
-        
-        if booking_data.get('status') not in ['assigned', 'in_progress']:
-            return jsonify({'success': False, 'message': 'Only assigned or in-progress bookings can be completed'}), 400
+            return jsonify({'success': False, 'message': 'Only assigned bookings can be completed'}), 400
         
         update_data = {
             'status': 'completed',
-            'dropoff_confirmation': end_location,
-            'actual_duration': actual_duration,
             'completion_notes': completion_notes,
             'completed_by': session.get('user_id'),
             'completed_by_name': session.get('display_name', session.get('email')),
@@ -488,7 +382,7 @@ def complete_metro_booking(booking_id):
         booking_ref.update(update_data)
         invalidate_cache()
         
-        return jsonify({'success': True, 'message': 'Trip completed successfully'}), 200
+        return jsonify({'success': True, 'message': 'Booking marked as completed'}), 200
         
     except Exception as e:
         print(f"Error completing booking: {e}")
@@ -556,14 +450,12 @@ def reassign_metro_booking(booking_id):
         if not booking_data:
             return jsonify({'success': False, 'message': 'Booking not found'}), 404
         
-        # Get driver details
         driver_ref = db.reference(f'users/{driver_id}')
         driver_data = driver_ref.get()
         
         if not driver_data:
             return jsonify({'success': False, 'message': 'Driver not found'}), 404
         
-        # Get vehicle details
         vehicle_ref = db.reference(f'transportUnits/{vehicle_id}')
         vehicle_data = vehicle_ref.get()
         
@@ -574,8 +466,7 @@ def reassign_metro_booking(booking_id):
             'assigned_driver': {
                 'id': driver_id,
                 'name': driver_data.get('fullName', 'N/A'),
-                'contact': driver_data.get('contactNumber', 'N/A'),
-                'license_number': driver_data.get('licenseNumber', 'No License')
+                'contact': driver_data.get('contactNumber', 'N/A')
             },
             'assigned_vehicle': {
                 'id': vehicle_id,
@@ -622,7 +513,6 @@ def get_available_drivers_metro():
                     'name': user_data.get('fullName', 'N/A'),
                     'email': user_data.get('email', 'N/A'),
                     'contact_number': user_data.get('contactNumber', 'N/A'),
-                    'license_number': user_data.get('licenseNumber', 'No License'),
                     'status': 'available'
                 })
         
@@ -639,17 +529,14 @@ def get_available_drivers_metro():
 def get_available_vehicles_metro():
     """Get all available vehicles, optionally filtered by type and not currently assigned"""
     try:
-        # Get vehicle type from query parameter (optional)
         vehicle_type = request.args.get('type', '').lower()
         
-        # Get current bookings to check which vehicles are already assigned
         all_bookings = get_all_metro_bookings()
         assigned_vehicle_ids = set()
         
-        # Find vehicles currently assigned to active bookings
         for booking in all_bookings:
             status = booking.get('status')
-            if status in ['assigned', 'in_progress']:  # Active bookings
+            if status == 'assigned':
                 assigned_vehicle = booking.get('assigned_vehicle')
                 if assigned_vehicle and assigned_vehicle.get('id'):
                     assigned_vehicle_ids.add(assigned_vehicle.get('id'))
@@ -665,14 +552,11 @@ def get_available_vehicles_metro():
         for unit_id, unit_data in all_units.items():
             is_available = unit_data.get('isAvailable', True)
             unit_type = unit_data.get('unitType', '').lower()
-            
-            # Check if vehicle is already assigned to an active booking
             is_assigned = unit_id in assigned_vehicle_ids
             
-            # Vehicle is available if: marked available AND not assigned to active booking
             if is_available and not is_assigned:
                 if vehicle_type and unit_type != vehicle_type:
-                    continue  # Skip if vehicle type doesn't match
+                    continue
                     
                 available_vehicles.append({
                     'id': unit_id,
@@ -703,9 +587,7 @@ def get_last_updated():
         
         last_updated = None
         for booking in all_bookings:
-            # Check various timestamp fields
             booking_time = (booking.get('timestamp') or 
-                          booking.get('updated_at') or 
                           booking.get('assigned_at') or 
                           booking.get('completed_at') or
                           booking.get('cancelled_at'))
@@ -728,7 +610,6 @@ def get_last_updated():
 def health_check():
     """Simple health check endpoint for monitoring"""
     try:
-        # Check if Firebase is accessible
         pending_ref = db.reference('/pendingBooking')
         test = pending_ref.get(shallow=True)
         
