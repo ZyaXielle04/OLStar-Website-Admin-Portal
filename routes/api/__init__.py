@@ -18,11 +18,10 @@ from .common.car_rental_self_drive_api import car_rental_self_drive_api_bp
 from .common.car_rental_with_driver_api import car_rental_with_driver_api_bp
 from .common.bookings.airport_transfer import airport_transfer_bp
 from .common.bookings.with_driver_metro import with_driver_metro_bp
-
+from .common.bookings.provincial_car_rental import provincial_car_rental_bp
 
 from .admin.dashboard_api import admin_dashboard_api_bp
 from .superadmin.dashboard_api import superadmin_dashboard_api_bp
-
 
 # ============================================
 # REGISTER COMMON APIs
@@ -37,7 +36,7 @@ api_bp.register_blueprint(car_rental_self_drive_api_bp)
 api_bp.register_blueprint(car_rental_with_driver_api_bp)
 api_bp.register_blueprint(airport_transfer_bp)
 api_bp.register_blueprint(with_driver_metro_bp)
-
+api_bp.register_blueprint(provincial_car_rental_bp)  # ← Provincial Car Rental Blueprint
 
 # ============================================
 # REGISTER DASHBOARD APIs
