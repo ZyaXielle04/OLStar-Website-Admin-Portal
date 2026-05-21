@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify, session, current_app
 from flask_limiter.util import get_remote_address
 from firebase_admin import auth, db
 from functools import wraps
+from backend.decorators import rate_limit
 
 # Create blueprint (NO local limiter instance here)
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/v1/auth')
@@ -27,7 +28,7 @@ def get_user_role(uid):
         if user_data and 'role' in user_data:
             role = user_data.get('role')
             # Allow all valid roles
-            if role in ['superadmin', 'admin', 'customer']:
+            if role in ['superadmin', 'admin', 'customer', 'driver']:
                 return role
         
         # Default to customer (least privilege) if role not found or invalid
@@ -50,7 +51,7 @@ def is_user_active(uid):
         return True
     except Exception as e:
         current_app.logger.error(f'Error checking user active status: {str(e)}')
-        return True  # Default to active on error
+        return False
 
 
 def get_user_full_name(uid):
@@ -93,6 +94,15 @@ def login_required_api(f):
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             return jsonify({'message': 'Authentication required'}), 401
+        user_id = session.get('user_id')
+        if not is_user_active(user_id):
+            session.clear()
+            return jsonify({'message': 'Authentication required'}), 401
+        current_role = get_user_role(user_id)
+        if current_role not in ['superadmin', 'admin', 'customer', 'driver']:
+            session.clear()
+            return jsonify({'message': 'Authentication required'}), 401
+        session['role'] = current_role
         return f(*args, **kwargs)
     return decorated_function
 
@@ -116,6 +126,7 @@ def role_required(allowed_roles):
 # ============================================
 
 @auth_bp.route('/login', methods=['POST'])
+@rate_limit("10 per minute")
 def login():
     """Authenticate user with email and password"""
     try:
@@ -254,6 +265,7 @@ def get_current_user():
 
 
 @auth_bp.route('/forgot-password', methods=['POST'])
+@rate_limit("5 per minute")
 def forgot_password():
     """Send password reset email to user"""
     try:
@@ -297,6 +309,7 @@ def forgot_password():
 
 
 @auth_bp.route('/verify-token', methods=['POST'])
+@rate_limit("30 per minute")
 def verify_token():
     """Verify Firebase ID token for additional security checks"""
     try:
@@ -327,6 +340,7 @@ def verify_token():
 
 
 @auth_bp.route('/change-password', methods=['POST'])
+@rate_limit("5 per minute")
 @login_required_api
 def change_password():
     """Change user password (requires old password)"""
@@ -404,6 +418,7 @@ def check_session():
 # ============================================
 
 @auth_bp.route('/admin/users', methods=['GET'])
+@rate_limit("120 per minute")
 @login_required_api
 @role_required(['superadmin'])
 def get_all_users():
@@ -433,6 +448,7 @@ def get_all_users():
 
 
 @auth_bp.route('/admin/users/<uid>/role', methods=['PUT'])
+@rate_limit("20 per minute")
 @login_required_api
 @role_required(['superadmin'])
 def update_user_role(uid):
@@ -456,6 +472,7 @@ def update_user_role(uid):
 
 
 @auth_bp.route('/admin/users/<uid>/deactivate', methods=['POST'])
+@rate_limit("30 per minute")
 @login_required_api
 @role_required(['superadmin'])
 def deactivate_user(uid):
@@ -471,6 +488,7 @@ def deactivate_user(uid):
 
 
 @auth_bp.route('/admin/users/<uid>/activate', methods=['POST'])
+@rate_limit("30 per minute")
 @login_required_api
 @role_required(['superadmin'])
 def activate_user(uid):

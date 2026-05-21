@@ -97,9 +97,6 @@ def check_csrf():
     if request.endpoint and request.endpoint.startswith('static'):
         return
     
-    if request.headers.get('X-API-Key'):
-        return
-    
     token = request.headers.get('X-CSRFToken') or request.cookies.get('XSRF-TOKEN')
     
     if not token:
@@ -132,16 +129,15 @@ def set_csrf_cookie(response):
 # -----------------------
 # Rate Limiter Configuration
 # -----------------------
-DEFAULT_LIMITS = ["100 per day", "30 per hour"]
+DEFAULT_LIMITS = ["5000 per day", "1000 per hour"]
 
-def get_remote_address_with_fallback():
-    forwarded = request.headers.get('X-Forwarded-For')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
+def rate_limit_key():
+    if session.get("user_id"):
+        return f"user:{session['user_id']}"
     return get_remote_address()
 
 limiter = Limiter(
-    get_remote_address_with_fallback,
+    rate_limit_key,
     app=app,
     default_limits=DEFAULT_LIMITS,
     storage_uri="memory://",
@@ -157,6 +153,12 @@ def exempt_from_rate_limiting():
             print(f"✓ Rate limit EXEMPT for: {endpoint}")
             return True
     return False
+
+def apply_custom_rate_limits():
+    for endpoint, view_func in list(app.view_functions.items()):
+        custom_limit = getattr(view_func, '_rate_limit', None)
+        if custom_limit:
+            app.view_functions[endpoint] = limiter.limit(custom_limit)(view_func)
 
 # -----------------------
 # Cloudinary configuration
@@ -243,6 +245,7 @@ except ModuleNotFoundError as e:
 app.register_blueprint(auth_bp)
 app.register_blueprint(pages_bp)
 app.register_blueprint(api_bp)
+apply_custom_rate_limits()
 
 # -----------------------
 # Health check

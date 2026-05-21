@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, session, redirect, url_for
 from functools import wraps
+from backend.decorators import refresh_session_user
 
 pages_bp = Blueprint('pages', __name__)
 
@@ -12,6 +13,9 @@ def login_required_page(f):
     def decorated_function(*args, **kwargs):
 
         if 'user_id' not in session:
+            return redirect(url_for('pages.login_page'))
+
+        if not refresh_session_user():
             return redirect(url_for('pages.login_page'))
 
         return f(*args, **kwargs)
