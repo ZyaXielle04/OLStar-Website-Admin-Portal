@@ -229,11 +229,31 @@
 }
 
 .data-table td {
+    vertical-align: middle; /* Add this */
     padding: 1rem;
     text-align: left;
     border-bottom: 1px solid #E2E8F0;
     color: #1E293B;
     font-size: 0.9rem;
+}
+
+.data-table td .btn-icon {
+    line-height: 1;
+    padding: 0.4rem 0.8rem;
+    height: 32px; /* Add fixed height */
+    box-sizing: border-box;
+}
+
+.data-table td.action-buttons {
+    display: table-cell; /* Override any flex display */
+    vertical-align: middle;
+}
+
+.data-table td .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    white-space: nowrap;
+    align-items: center;
 }
 
 .data-table tbody tr:hover {
@@ -267,6 +287,8 @@
     display: flex;
     gap: 0.5rem;
     white-space: nowrap;
+    align-items: center; /* Add this */
+    min-height: 36px; /* Add this to maintain consistent height */
 }
 
 .btn-icon {
@@ -282,6 +304,8 @@
     border: none;
     font-family: inherit;
     gap: 6px;
+    margin: 0;
+    vertical-align: middle;
 }
 
 .btn-view {
@@ -848,6 +872,10 @@
 /* Table cell hover effect */
 .data-table td:first-child {
     position: relative;
+}
+
+.data-table td:last-child {
+    vertical-align: middle;
 }
 
 .data-table tr {

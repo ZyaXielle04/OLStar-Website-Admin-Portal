@@ -9,6 +9,15 @@ from backend.decorators import login_required_api, role_required_api
 
 common_transport_units_api_bp = Blueprint('common_transport_units_api', __name__, url_prefix='/common/transport-units')
 
+VALID_UNIT_TYPES = {'Van', 'SUV', 'Sedan'}
+PACKAGE_SYNC_FIELDS = {
+    'color',
+    'plateNumber',
+    'transportUnit',
+    'unitType',
+    'isAvailable'
+}
+
 def log_activity(description, user_id, user_name):
     """Helper function to log activities to Realtime Database"""
     try:
@@ -35,6 +44,54 @@ def generate_unit_id():
         
         if not existing:
             return unit_id
+
+def normalize_plate_number(plate_number):
+    """Normalize plate numbers before storing or comparing them."""
+    return ' '.join(str(plate_number or '').strip().upper().split())
+
+def plate_number_exists(plate_number, exclude_unit_id=None):
+    """Check whether a plate number is already used by another transport unit."""
+    normalized_plate = normalize_plate_number(plate_number)
+    units_ref = db.reference('transportUnits')
+    all_units = units_ref.get()
+
+    if not all_units:
+        return False
+
+    for unit_id, unit_data in all_units.items():
+        if exclude_unit_id and unit_id == exclude_unit_id:
+            continue
+
+        if normalize_plate_number(unit_data.get('plateNumber')) == normalized_plate:
+            return True
+
+    return False
+
+def get_active_bookings_for_transport_unit(unit_id):
+    """Return active bookings currently assigned to a transport unit."""
+    active_statuses = {'assigned'}
+    bookings_ref = db.reference('pendingBooking')
+    all_bookings = bookings_ref.get()
+    active_bookings = []
+
+    if not all_bookings:
+        return active_bookings
+
+    for booking_id, booking_data in all_bookings.items():
+        assigned_vehicle = booking_data.get('assigned_vehicle') or {}
+        if assigned_vehicle.get('id') != unit_id:
+            continue
+
+        booking_status = booking_data.get('status', 'unassigned')
+        if booking_status in active_statuses:
+            active_bookings.append({
+                'id': booking_id,
+                'status': booking_status,
+                'clientName': booking_data.get('clientName', 'N/A'),
+                'travelDate': booking_data.get('travelDate', 'N/A')
+            })
+
+    return active_bookings
 
 def upload_image_to_cloudinary(file, unit_id):
     """Upload image to Cloudinary directly (no preset needed)"""
@@ -64,14 +121,36 @@ def upload_image_to_cloudinary(file, unit_id):
         )
         
         secure_url = upload_result.get('secure_url')
+        public_id = upload_result.get('public_id')
+        if not secure_url or not public_id:
+            return None
+
         print(f"Upload successful! URL: {secure_url}")
-        return secure_url
-        
+        return {
+            'secure_url': secure_url,
+            'public_id': public_id
+        }
+
+    except ValueError:
+        raise
     except Exception as e:
         print(f"Error uploading to Cloudinary: {str(e)}")
         import traceback
         traceback.print_exc()
         return None
+
+def delete_cloudinary_image(public_id):
+    """Delete a Cloudinary image when the database still has its public id."""
+    if not public_id:
+        return False
+
+    try:
+        result = cloudinary.uploader.destroy(public_id)
+        print(f"Cloudinary delete result for {public_id}: {result}")
+        return result.get('result') in {'ok', 'not found'}
+    except Exception as e:
+        print(f"Error deleting Cloudinary image {public_id}: {str(e)}")
+        return False
 
 @common_transport_units_api_bp.route('')
 @login_required_api
@@ -95,6 +174,7 @@ def get_transport_units():
                 'unitType': unit_data.get('unitType', ''),
                 'isAvailable': unit_data.get('isAvailable', True),
                 'imageUrl': unit_data.get('imageUrl', None),
+                'imagePublicId': unit_data.get('imagePublicId', None),
                 'created_at': unit_data.get('created_at'),
                 'created_by': unit_data.get('created_by'),
                 'created_by_name': unit_data.get('created_by_name'),
@@ -158,20 +238,27 @@ def create_transport_unit():
         print(f"Generated Unit ID: {unit_id}")
         
         # Validate unit type
-        valid_unit_types = ['Van', 'SUV', 'Sedan']
-        if data['unitType'] not in valid_unit_types:
-            return jsonify({'error': f'Unit type must be one of: {", ".join(valid_unit_types)}'}), 400
+        if data['unitType'] not in VALID_UNIT_TYPES:
+            return jsonify({'error': f'Unit type must be one of: {", ".join(sorted(VALID_UNIT_TYPES))}'}), 400
         
+        plate_number = normalize_plate_number(data['plateNumber'])
+        if plate_number_exists(plate_number):
+            return jsonify({'error': 'A transport unit with this plate number already exists'}), 409
+
         # Upload image to Cloudinary if provided
         image_url = None
+        image_public_id = None
         if image_file and image_file.filename:
             print(f"Image file detected: {image_file.filename}")
             try:
-                image_url = upload_image_to_cloudinary(image_file, unit_id)
-                if image_url:
+                image_info = upload_image_to_cloudinary(image_file, unit_id)
+                if image_info:
+                    image_url = image_info['secure_url']
+                    image_public_id = image_info['public_id']
                     print(f"Image uploaded successfully: {image_url}")
                 else:
                     print("Image upload failed")
+                    return jsonify({'error': 'Image upload failed. Please try again.'}), 502
             except ValueError as e:
                 return jsonify({'error': str(e)}), 400
         else:
@@ -180,11 +267,12 @@ def create_transport_unit():
         # Create new transport unit
         new_unit = {
             'color': data['color'].strip(),
-            'plateNumber': data['plateNumber'].strip().upper(),
+            'plateNumber': plate_number,
             'transportUnit': data['transportUnit'].strip(),
             'unitType': data['unitType'],
             'isAvailable': data.get('isAvailable', 'true') == 'true',
             'imageUrl': image_url,
+            'imagePublicId': image_public_id,
             'created_at': datetime.now().isoformat(),
             'created_by': session.get('user_id'),
             'created_by_name': session.get('display_name')
@@ -250,7 +338,9 @@ def update_transport_unit(unit_id):
             package_update_data['color'] = color_value
         
         if 'plateNumber' in data:
-            plate_value = data['plateNumber'].strip().upper()
+            plate_value = normalize_plate_number(data['plateNumber'])
+            if plate_number_exists(plate_value, exclude_unit_id=unit_id):
+                return jsonify({'error': 'A transport unit with this plate number already exists'}), 409
             update_data['plateNumber'] = plate_value
             package_update_data['plateNumber'] = plate_value
         
@@ -260,9 +350,8 @@ def update_transport_unit(unit_id):
             package_update_data['transportUnit'] = unit_value
         
         if 'unitType' in data:
-            valid_unit_types = ['Van', 'SUV', 'Sedan']
-            if data['unitType'] not in valid_unit_types:
-                return jsonify({'error': f'Unit type must be one of: {", ".join(valid_unit_types)}'}), 400
+            if data['unitType'] not in VALID_UNIT_TYPES:
+                return jsonify({'error': f'Unit type must be one of: {", ".join(sorted(VALID_UNIT_TYPES))}'}), 400
             update_data['unitType'] = data['unitType']
             package_update_data['unitType'] = data['unitType']
         
@@ -275,19 +364,27 @@ def update_transport_unit(unit_id):
         if image_file and image_file.filename:
             print(f"Image file detected: {image_file.filename}")
             try:
-                image_url = upload_image_to_cloudinary(image_file, unit_id)
-                if image_url:
+                image_info = upload_image_to_cloudinary(image_file, unit_id)
+                if image_info:
+                    image_url = image_info['secure_url']
+                    image_public_id = image_info['public_id']
                     update_data['imageUrl'] = image_url
+                    update_data['imagePublicId'] = image_public_id
+                    if existing.get('imagePublicId') and existing.get('imagePublicId') != image_public_id:
+                        delete_cloudinary_image(existing.get('imagePublicId'))
                     # Note: Images are not synced to packages (packages only store unit references)
                     print(f"Image uploaded successfully: {image_url}")
                 else:
                     print("Image upload failed")
+                    return jsonify({'error': 'Image upload failed. Please try again.'}), 502
             except ValueError as e:
                 return jsonify({'error': str(e)}), 400
         
         # Handle image removal
         if 'removeImage' in data and data['removeImage'] == 'true':
             update_data['imageUrl'] = None
+            update_data['imagePublicId'] = None
+            delete_cloudinary_image(existing.get('imagePublicId'))
             print("Removing image")
         
         update_data['updated_at'] = datetime.now().isoformat()
@@ -301,7 +398,7 @@ def update_transport_unit(unit_id):
         
         # SYNC WITH PACKAGES: Update this unit in all packages that contain it
         if package_update_data:
-            update_transport_unit_in_all_packages(unit_id, package_update_data)
+            sync_transport_unit_package_snapshots(unit_id, package_update_data)
         
         # Log activity
         log_activity(
@@ -331,11 +428,19 @@ def delete_transport_unit(unit_id):
             return jsonify({'error': 'Transport unit not found'}), 404
         
         unit_name = existing.get('transportUnit', unit_id)
+
+        active_bookings = get_active_bookings_for_transport_unit(unit_id)
+        if active_bookings:
+            return jsonify({
+                'error': 'Cannot delete this transport unit because it is assigned to active bookings',
+                'active_bookings': active_bookings
+            }), 409
         
         # FIRST: Remove this unit from all packages that contain it
         remove_transport_unit_from_all_packages(unit_id)
         
         # THEN: Delete the transport unit
+        delete_cloudinary_image(existing.get('imagePublicId'))
         unit_ref.delete()
         
         # Log activity
@@ -373,7 +478,7 @@ def toggle_availability(unit_id):
         })
         
         # SYNC WITH PACKAGES: Update availability in all packages
-        update_transport_unit_in_all_packages(unit_id, {'isAvailable': new_status})
+        sync_transport_unit_package_snapshots(unit_id, {'isAvailable': new_status})
         
         status_text = "available" if new_status else "unavailable"
         
@@ -395,9 +500,18 @@ def toggle_availability(unit_id):
     
 # Add these helper functions at the top of your transport_units_api.py
 
-def update_transport_unit_in_all_packages(transport_unit_id, update_data):
-    """Update a transport unit in all packages that contain it"""
+def sync_transport_unit_package_snapshots(transport_unit_id, update_data):
+    """Update package snapshots for fields copied from transport units."""
     try:
+        package_update_data = {
+            key: value
+            for key, value in update_data.items()
+            if key in PACKAGE_SYNC_FIELDS
+        }
+
+        if not package_update_data:
+            return 0
+
         packages_ref = db.reference('packages')
         all_packages = packages_ref.get()
         
@@ -416,7 +530,7 @@ def update_transport_unit_in_all_packages(transport_unit_id, update_data):
             for i, unit in enumerate(transport_units):
                 if isinstance(unit, dict) and unit.get('transportUnitId') == transport_unit_id:
                     # Update the unit data
-                    for key, value in update_data.items():
+                    for key, value in package_update_data.items():
                         transport_units[i][key] = value
                     updated = True
                     updated_count += 1

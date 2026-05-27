@@ -249,6 +249,35 @@ function setupEventListeners() {
             }
         });
     }
+
+    // ===== DELEGATED CLICK HANDLER FOR ACTION BUTTONS (XSS-safe) =====
+    const tbody = document.getElementById('unitsTableBody');
+    if (tbody) {
+        tbody.addEventListener('click', function(e) {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const action = btn.getAttribute('data-action');
+            const unitId = btn.getAttribute('data-unit-id');
+            if (!action || !unitId) return;
+
+            switch (action) {
+                case 'view':
+                    viewUnit(unitId);
+                    break;
+                case 'edit':
+                    editUnit(unitId);
+                    break;
+                case 'toggle':
+                    const currentStatus = btn.getAttribute('data-current-status') === 'true';
+                    toggleAvailability(unitId, currentStatus);
+                    break;
+                case 'delete':
+                    const unitName = btn.getAttribute('data-unit-name');
+                    deleteUnit(unitId, unitName);
+                    break;
+            }
+        });
+    }
 }
 
 function applyFilters() {
@@ -295,7 +324,7 @@ function renderUnitsTable(units, totalCount) {
     if (!tbody) return;
     
     if (!units || units.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No transport units found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No transport units found</td></tr>';
         updatePaginationInfo(0);
         updatePaginationControls();
         return;
@@ -316,32 +345,35 @@ function renderUnitsTable(units, totalCount) {
             row.setAttribute('data-image-url', unit.imageUrl);
         }
         
-        // Optimized image loading with lazy loading
+        // Optimized image loading with lazy loading – ESCAPED alt text
         let imageHtml = '';
         if (unit.imageUrl) {
-            // Use Cloudinary's automatic optimization parameters
             const optimizedUrl = unit.imageUrl.replace('/upload/', '/upload/q_auto,f_auto,w_50,h_50,c_fill/');
-            imageHtml = `<img src="${optimizedUrl}" alt="${unit.transportUnit}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;" loading="lazy">`;
+            imageHtml = `<img src="${optimizedUrl}" alt="${escapeHtml(unit.transportUnit)}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 8px;" loading="lazy">`;
         } else {
             imageHtml = `<div style="width: 40px; height: 40px; background: #F1F5F9; border-radius: 8px; display: flex; align-items: center; justify-content: center;"><i class="fas fa-image" style="color: #94A3B8;"></i></div>`;
         }
         
-        // Build action buttons
+        // Build action buttons with DATA ATTRIBUTES – NO inline onclick
         let actions = `
-            <button class="btn-icon btn-view" onclick="viewUnit('${unit.id}')" title="View">
+            <button class="btn-icon btn-view" data-action="view" data-unit-id="${escapeHtml(unit.id)}" title="View">
                 <i class="fas fa-eye"></i>
             </button>
         `;
         
         if (userRole === 'superadmin') {
             actions += `
-                <button class="btn-icon btn-edit" onclick="editUnit('${unit.id}')" title="Edit">
+                <button class="btn-icon btn-edit" data-action="edit" data-unit-id="${escapeHtml(unit.id)}" title="Edit">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn-icon btn-toggle ${unit.isAvailable ? 'available' : 'unavailable'}" onclick="toggleAvailability('${unit.id}', ${unit.isAvailable})" title="Toggle Status">
+                <button class="btn-icon btn-toggle ${unit.isAvailable ? 'available' : 'unavailable'}" 
+                        data-action="toggle" data-unit-id="${escapeHtml(unit.id)}" 
+                        data-current-status="${unit.isAvailable}" title="Toggle Status">
                     <i class="fas fa-power-off"></i>
                 </button>
-                <button class="btn-icon btn-delete" onclick="deleteUnit('${unit.id}', '${escapeHtml(unit.transportUnit)}')" title="Delete">
+                <button class="btn-icon btn-delete" data-action="delete" 
+                        data-unit-id="${escapeHtml(unit.id)}" 
+                        data-unit-name="${escapeHtml(unit.transportUnit)}" title="Delete">
                     <i class="fas fa-trash"></i>
                 </button>
             `;
@@ -355,7 +387,9 @@ function renderUnitsTable(units, totalCount) {
             <td>${escapeHtml(unit.color)}</td>
             <td>${escapeHtml(unit.unitType)}</td>
             <td><span class="badge ${statusClass}">${statusText}</span></td>
-            <td class="action-buttons">${actions}</td>
+            <td>
+                <div class="action-buttons">${actions}</div>
+            </td>
         `;
         
         // Add hover event listeners
@@ -434,7 +468,6 @@ function showRowPreview(unit, event) {
     }
     
     if (unit.imageUrl) {
-        // Use optimized image for preview
         const optimizedUrl = unit.imageUrl.replace('/upload/', '/upload/q_auto,f_auto,w_250,h_180,c_fill/');
         rowPreviewPopup.innerHTML = `<img src="${optimizedUrl}" alt="${escapeHtml(unit.transportUnit)}" loading="lazy">`;
     } else {
@@ -520,7 +553,7 @@ function showSkeleton(show) {
 function showError(message) {
     const tbody = document.getElementById('unitsTableBody');
     if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="7" class="error-state">${message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="error-state">${message}</td></tr>`;
     }
 }
 
