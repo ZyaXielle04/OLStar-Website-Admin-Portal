@@ -117,6 +117,44 @@ def cleanup_expired_discounted_rates():
         traceback.print_exc()
         return False
 
+def normalize_metro_manila_rates(rates_data):
+    """Normalize Metro Manila rates to handle SUV/MPV nested structure"""
+    if not rates_data:
+        return {}
+    
+    normalized = {}
+    for rate_type, type_data in rates_data.items():
+        normalized[rate_type] = {}
+        for vehicle_key, vehicle_data in type_data.items():
+            # Check if this is the SUV/MPV nested structure
+            if vehicle_key == 'SUV' and isinstance(vehicle_data, dict) and 'MPV' in vehicle_data:
+                # Flatten SUV/MPV nested structure
+                normalized[rate_type]['SUV/MPV'] = vehicle_data['MPV']
+            else:
+                # Keep other vehicles as-is (Sedan, Van, etc.)
+                normalized[rate_type][vehicle_key] = vehicle_data
+    
+    return normalized
+
+def normalize_provincial_rates(rates_data):
+    """Normalize Provincial rates to handle SUV/MPV nested structure"""
+    if not rates_data:
+        return {}
+    
+    normalized = {}
+    for package_type, package_data in rates_data.items():
+        normalized[package_type] = {}
+        for vehicle_key, vehicle_data in package_data.items():
+            # Check if this is the SUV/MPV nested structure
+            if vehicle_key == 'SUV' and isinstance(vehicle_data, dict) and 'MPV' in vehicle_data:
+                # Flatten SUV/MPV nested structure
+                normalized[package_type]['SUV/MPV'] = vehicle_data['MPV']
+            else:
+                # Keep other vehicles as-is (Sedan, Van, etc.)
+                normalized[package_type][vehicle_key] = vehicle_data
+    
+    return normalized
+
 def recalculate_all_discounted_rates(discount_data):
     """Recalculate all discounted rates for with-driver module"""
     try:
@@ -136,43 +174,75 @@ def recalculate_all_discounted_rates(discount_data):
         discounted_ref.delete()
         print("[DEBUG] recalculate_all_discounted_rates - Cleared existing discounted rates")
         
-        # Recalculate Metro Manila rates
+        # Recalculate Metro Manila rates (handle nested SUV/MPV structure)
         metro_manila_ref = db.reference('rates/carRental/withDriver/metroManila')
         metro_manila_rates = metro_manila_ref.get() or {}
         
         print(f"[DEBUG] recalculate_all_discounted_rates - Metro Manila rates found: {len(metro_manila_rates)} rate types")
         
         for rate_type, type_data in metro_manila_rates.items():
-            for vehicle_type, vehicle_data in type_data.items():
-                for duration_key, price_str in vehicle_data.items():
-                    try:
-                        original_price = float(price_str) if price_str else 0
-                        discounted_price = calculate_discounted_price(original_price, discount_type, discount_value)
-                        
-                        discounted_path = f'rates/carRental/withDriver/discountedRates/metroManila/{rate_type}/{vehicle_type}/{duration_key}'
-                        discounted_ref = db.reference(discounted_path)
-                        discounted_ref.set(str(discounted_price))
-                    except (ValueError, TypeError):
-                        continue
+            for vehicle_key, vehicle_data in type_data.items():
+                # Handle SUV/MPV nested structure
+                if vehicle_key == 'SUV' and isinstance(vehicle_data, dict) and 'MPV' in vehicle_data:
+                    # Process MPV under SUV
+                    mpv_data = vehicle_data['MPV']
+                    for duration_key, price_str in mpv_data.items():
+                        try:
+                            original_price = float(price_str) if price_str else 0
+                            discounted_price = calculate_discounted_price(original_price, discount_type, discount_value)
+                            
+                            discounted_path = f'rates/carRental/withDriver/discountedRates/metroManila/{rate_type}/SUV/MPV/{duration_key}'
+                            discounted_ref = db.reference(discounted_path)
+                            discounted_ref.set(str(discounted_price))
+                        except (ValueError, TypeError):
+                            continue
+                else:
+                    # Normal flat structure for Sedan, Van, etc.
+                    for duration_key, price_str in vehicle_data.items():
+                        try:
+                            original_price = float(price_str) if price_str else 0
+                            discounted_price = calculate_discounted_price(original_price, discount_type, discount_value)
+                            
+                            discounted_path = f'rates/carRental/withDriver/discountedRates/metroManila/{rate_type}/{vehicle_key}/{duration_key}'
+                            discounted_ref = db.reference(discounted_path)
+                            discounted_ref.set(str(discounted_price))
+                        except (ValueError, TypeError):
+                            continue
         
-        # Recalculate Provincial rates
+        # Recalculate Provincial rates (handle nested SUV/MPV structure)
         provincial_ref = db.reference('rates/carRental/withDriver/provincial')
         provincial_rates = provincial_ref.get() or {}
         
         print(f"[DEBUG] recalculate_all_discounted_rates - Provincial rates found: {len(provincial_rates)} package types")
         
         for package_type, package_data in provincial_rates.items():
-            for vehicle_type, vehicle_data in package_data.items():
-                for destination_key, price_str in vehicle_data.items():
-                    try:
-                        original_price = float(price_str) if price_str else 0
-                        discounted_price = calculate_discounted_price(original_price, discount_type, discount_value)
-                        
-                        discounted_path = f'rates/carRental/withDriver/discountedRates/provincial/{package_type}/{vehicle_type}/{destination_key}'
-                        discounted_ref = db.reference(discounted_path)
-                        discounted_ref.set(str(discounted_price))
-                    except (ValueError, TypeError):
-                        continue
+            for vehicle_key, vehicle_data in package_data.items():
+                # Handle SUV/MPV nested structure for Provincial
+                if vehicle_key == 'SUV' and isinstance(vehicle_data, dict) and 'MPV' in vehicle_data:
+                    # Process MPV under SUV
+                    mpv_data = vehicle_data['MPV']
+                    for destination_key, price_str in mpv_data.items():
+                        try:
+                            original_price = float(price_str) if price_str else 0
+                            discounted_price = calculate_discounted_price(original_price, discount_type, discount_value)
+                            
+                            discounted_path = f'rates/carRental/withDriver/discountedRates/provincial/{package_type}/SUV/MPV/{destination_key}'
+                            discounted_ref = db.reference(discounted_path)
+                            discounted_ref.set(str(discounted_price))
+                        except (ValueError, TypeError):
+                            continue
+                else:
+                    # Normal flat structure for Sedan, Van, etc.
+                    for destination_key, price_str in vehicle_data.items():
+                        try:
+                            original_price = float(price_str) if price_str else 0
+                            discounted_price = calculate_discounted_price(original_price, discount_type, discount_value)
+                            
+                            discounted_path = f'rates/carRental/withDriver/discountedRates/provincial/{package_type}/{vehicle_key}/{destination_key}'
+                            discounted_ref = db.reference(discounted_path)
+                            discounted_ref.set(str(discounted_price))
+                        except (ValueError, TypeError):
+                            continue
                         
         print("[DEBUG] recalculate_all_discounted_rates - COMPLETED")
     except Exception as e:
@@ -758,11 +828,13 @@ def toggle_duration(hours_key):
 @role_required_api(['superadmin', 'admin'])
 @no_rate_limit
 def get_metro_manila_rates():
-    """Get all Metro Manila rates for with-driver"""
+    """Get all Metro Manila rates for with-driver (normalized)"""
     try:
         rates_ref = db.reference('rates/carRental/withDriver/metroManila')
         all_rates = rates_ref.get() or {}
-        return jsonify({'rates': all_rates})
+        # Normalize the rates to handle SUV/MPV nested structure
+        normalized_rates = normalize_metro_manila_rates(all_rates)
+        return jsonify({'rates': normalized_rates})
     except Exception as e:
         print(f"ERROR: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -784,7 +856,14 @@ def update_metro_manila_rate():
         if not all([vehicle_type, rate_type, duration, price is not None]):
             return jsonify({'error': 'Missing required fields'}), 400
         
-        rate_path = f'rates/carRental/withDriver/metroManila/{rate_type}/{vehicle_type}/{duration}'
+        # Handle SUV/MPV special case
+        if vehicle_type == 'SUV/MPV':
+            # Store in nested structure
+            rate_path = f'rates/carRental/withDriver/metroManila/{rate_type}/SUV/MPV/{duration}'
+        else:
+            # Normal flat structure for Sedan, Van, etc.
+            rate_path = f'rates/carRental/withDriver/metroManila/{rate_type}/{vehicle_type}/{duration}'
+        
         rate_ref = db.reference(rate_path)
         
         if str(price) == '0' or price == 0:
@@ -938,11 +1017,13 @@ def toggle_provincial_destination(destination_key):
 @role_required_api(['superadmin', 'admin'])
 @no_rate_limit
 def get_provincial_rates():
-    """Get all Provincial rates for with-driver"""
+    """Get all Provincial rates for with-driver (normalized)"""
     try:
         rates_ref = db.reference('rates/carRental/withDriver/provincial')
         all_rates = rates_ref.get() or {}
-        return jsonify({'rates': all_rates})
+        # Normalize the rates to handle SUV/MPV nested structure
+        normalized_rates = normalize_provincial_rates(all_rates)
+        return jsonify({'rates': normalized_rates})
     except Exception as e:
         print(f"ERROR: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -964,7 +1045,14 @@ def update_provincial_rate():
         if not all([vehicle_type, package_type, destination, price is not None]):
             return jsonify({'error': 'Missing required fields'}), 400
         
-        rate_path = f'rates/carRental/withDriver/provincial/{package_type}/{vehicle_type}/{destination}'
+        # Handle SUV/MPV special case
+        if vehicle_type == 'SUV/MPV':
+            # Store in nested structure
+            rate_path = f'rates/carRental/withDriver/provincial/{package_type}/SUV/MPV/{destination}'
+        else:
+            # Normal flat structure for Sedan, Van, etc.
+            rate_path = f'rates/carRental/withDriver/provincial/{package_type}/{vehicle_type}/{destination}'
+        
         rate_ref = db.reference(rate_path)
         
         if str(price) == '0' or price == 0:
@@ -991,14 +1079,14 @@ def update_provincial_rate():
         return jsonify({'error': str(e)}), 500
 
 
-# ========== GET ALL RATES (Combined) ==========
+# ========== GET ALL RATES (Combined with normalization) ==========
 
 @car_rental_with_driver_api_bp.route('/rates/all', methods=['GET'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])
 @no_rate_limit
 def get_all_rates():
-    """Get all with-driver rates (both Metro Manila and Provincial) including discounted rates"""
+    """Get all with-driver rates (both Metro Manila and Provincial) including discounted rates with normalization"""
     try:
         discount_ref = db.reference('rates/carRental/withDriver/globalDiscount')
         discount_data = discount_ref.get()
@@ -1017,11 +1105,19 @@ def get_all_rates():
         discounted_metro_rates = discounted_metro_ref.get() or {}
         discounted_provincial_rates = discounted_provincial_ref.get() or {}
         
+        # Normalize Metro Manila rates to handle SUV/MPV nested structure
+        normalized_metro = normalize_metro_manila_rates(metro_manila_rates)
+        # Normalize Provincial rates to handle SUV/MPV nested structure
+        normalized_provincial = normalize_provincial_rates(provincial_rates)
+        # Normalize discounted rates as well
+        normalized_discounted_metro = normalize_metro_manila_rates(discounted_metro_rates)
+        normalized_discounted_provincial = normalize_provincial_rates(discounted_provincial_rates)
+        
         return jsonify({
-            'metroManila': metro_manila_rates,
-            'provincial': provincial_rates,
-            'discountedMetroManila': discounted_metro_rates,
-            'discountedProvincial': discounted_provincial_rates,
+            'metroManila': normalized_metro,
+            'provincial': normalized_provincial,
+            'discountedMetroManila': normalized_discounted_metro,
+            'discountedProvincial': normalized_discounted_provincial,
             'discount': discount_data
         })
     except Exception as e:

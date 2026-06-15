@@ -441,7 +441,7 @@
         if (!confirmed) return;
         
         try {
-            const response = await apiRequest(`${API_BASE_URL}/discount?removeFromRates=true`, {
+            const response = await apiRequest(`${API_BASE_URL}/discount`, {
                 method: 'DELETE'
             });
             const data = await response.json();
@@ -766,6 +766,9 @@
     }
     
     function getMetroManilaRate(vehicleType, durationKey) {
+        // The data is normalized by backend, so we can just use vehicleType directly as the key
+        let rateData = null;
+        
         // First try to get discounted rate
         if (withDriverData.discountedMetroManilaRates[currentRateType] && 
             withDriverData.discountedMetroManilaRates[currentRateType][vehicleType] && 
@@ -779,6 +782,7 @@
             withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey]) {
             return parseInt(withDriverData.metroManilaRates[currentRateType][vehicleType][durationKey]);
         }
+        
         return 0;
     }
     
@@ -856,7 +860,7 @@
                         ${discountBadge}
                         <div class="price-breakdown">(${duration.hours}hrs)</div>
                     </div>
-                   </div>`;
+                    </td>`;
             }
             
             rowsHtml += '</tr>';
@@ -904,6 +908,7 @@
     }
     
     function getProvincialRate(vehicleType, destinationKey) {
+        // The data is normalized by backend, so we can just use vehicleType directly as the key
         // First try to get discounted rate
         if (withDriverData.discountedProvincialRates[currentPackageType] && 
             withDriverData.discountedProvincialRates[currentPackageType][vehicleType] && 
@@ -940,12 +945,12 @@
         const thead = document.getElementById('provincialTableHeaderWD');
         
         if (!withDriverData.vehicleTypes || withDriverData.vehicleTypes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No vehicle types available</div><tr>';
+            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No vehicle types available</td></tr>';
             return;
         }
         
         if (!withDriverData.provincialDestinations || withDriverData.provincialDestinations.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No provincial destinations configured. Click "Add Destination" to add destinations.</div></tr>';
+            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">No provincial destinations configured. Click "Add Destination" to add destinations.</td></tr>';
             return;
         }
         
@@ -971,7 +976,7 @@
         
         for (const vehicleType of withDriverData.vehicleTypes) {
             rowsHtml += '<tr>';
-            rowsHtml += `<td><strong>${escapeHtml(vehicleType)}</strong></div>`;
+            rowsHtml += `<td><strong>${escapeHtml(vehicleType)}</strong></td>`;
             
             for (const destination of withDriverData.provincialDestinations) {
                 const originalRate = getOriginalProvincialRate(vehicleType, destination.key);
@@ -997,7 +1002,7 @@
                         ${priceHtml}
                         ${discountBadge}
                     </div>
-                   </div>`;
+                    </td>`;
             }
             
             rowsHtml += '</tr>';
