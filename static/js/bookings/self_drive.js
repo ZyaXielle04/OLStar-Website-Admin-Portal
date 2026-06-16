@@ -1,0 +1,1039 @@
+// static/js/bookings/self_drive.js - Self-Drive Booking Booking Management
+
+// ============================================
+// CSRF TOKEN HELPER FUNCTIONS
+// ============================================
+
+function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        if (name === 'XSRF-TOKEN') {
+            return decodeURIComponent(value);
+        }
+    }
+    return null;
+}
+
+async function apiRequest(url, options = {}) {
+    const method = options.method || 'GET';
+    const csrfToken = getCsrfToken();
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    if (method !== 'GET' && csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    const config = {
+        ...options,
+        method,
+        headers,
+        credentials: 'include'
+    };
+    
+    if (method === 'GET' && config.body) {
+        delete config.body;
+    }
+    
+    return fetch(url, config);
+}
+
+// ============================================
+// POLLING WITH CACHE & SCROLL PRESERVATION
+// ============================================
+
+let pollingInterval = null;
+let isRefreshing = false;
+let lastScrollPosition = 0;
+let lastBookingIdsHash = '';
+let allBookings = [];
+let currentStatus = 'unassigned';
+let currentSearchTerm = '';
+let currentDateFilter = 'all';
+
+// Cache for bookings data
+let bookingsCache = {
+    data: null,
+    timestamp: null,
+    cacheDuration: 30000, // 30 seconds cache
+    isValid: function() {
+        return this.data && this.timestamp && (Date.now() - this.timestamp) < this.cacheDuration;
+    },
+    set: function(data) {
+        this.data = data;
+        this.timestamp = Date.now();
+    },
+    get: function() {
+        return this.data;
+    },
+    clear: function() {
+        this.data = null;
+        this.timestamp = null;
+    }
+};
+
+// Save current scroll position
+function saveScrollPosition() {
+    lastScrollPosition = window.scrollY;
+}
+
+// Restore scroll position
+function restoreScrollPosition() {
+    if (lastScrollPosition > 0) {
+        setTimeout(() => {
+            window.scrollTo({
+                top: lastScrollPosition,
+                behavior: 'instant'
+            });
+        }, 50);
+    }
+}
+
+// Generate unique hash of current bookings (for change detection)
+function getBookingsHash(bookings) {
+    return JSON.stringify(bookings.map(b => ({
+        id: b.id,
+        status: b.status,
+        updatedAt: b.updatedAt || b.timestamp
+    })));
+}
+
+// Setup polling listener
+function setupPollingListener() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+    }
+    
+    pollingInterval = setInterval(() => {
+        if (!isRefreshing && document.hasFocus()) {
+            refreshBookingsSilently();
+        }
+    }, 30000); // 30 seconds
+    
+    console.log('Auto-refresh enabled (every 30 seconds)');
+}
+
+// Silent refresh without user notification (preserves scroll)
+async function refreshBookingsSilently() {
+    isRefreshing = true;
+    
+    try {
+        // Save current scroll position before refresh
+        saveScrollPosition();
+        
+        // Check cache first
+        if (bookingsCache.isValid()) {
+            const cachedData = bookingsCache.get();
+            const newHash = getBookingsHash(cachedData.bookings);
+            
+            if (newHash !== lastBookingIdsHash) {
+                const oldCount = allBookings.length;
+                allBookings = cachedData.bookings;
+                lastBookingIdsHash = newHash;
+                
+                // Update UI without full re-render if possible
+                updateStats();
+                updateStatusCounts();
+                
+                // Only re-render if necessary
+                if (needsReRender(cachedData.bookings)) {
+                    renderBookingsCards();
+                } else {
+                    // Just update counts and badges without re-rendering cards
+                    updateCardStatuses(cachedData.bookings);
+                }
+                
+                // Notify only for new bookings
+                if (cachedData.bookings.length > oldCount) {
+                    toastInfo(`${cachedData.bookings.length - oldCount} new booking(s) received!`, 'Update');
+                }
+            }
+        } else {
+            // Fetch fresh data with ETag support
+            const response = await apiRequest(`/api/common/self-drive/bookings?status=all&_t=${Date.now()}`);
+            
+            if (response.status === 304) {
+                // Not modified, just update cache timestamp
+                if (bookingsCache.data) {
+                    bookingsCache.timestamp = Date.now();
+                }
+                return;
+            }
+            
+            if (!response.ok) {
+                throw new Error('Failed to refresh');
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update cache
+                bookingsCache.set(data);
+                
+                const newHash = getBookingsHash(data.bookings);
+                
+                if (newHash !== lastBookingIdsHash) {
+                    const oldCount = allBookings.length;
+                    allBookings = data.bookings;
+                    lastBookingIdsHash = newHash;
+                    
+                    updateStats();
+                    updateStatusCounts();
+                    renderBookingsCards();
+                    
+                    // Notify only for new bookings
+                    if (data.bookings.length > oldCount) {
+                        toastInfo(`${data.bookings.length - oldCount} new booking(s) received!`, 'Update');
+                    }
+                }
+            }
+        }
+        
+        // Restore scroll position after refresh
+        restoreScrollPosition();
+        
+    } catch (error) {
+        console.error('Auto-refresh error:', error);
+    } finally {
+        isRefreshing = false;
+    }
+}
+
+// Check if UI needs full re-render
+function needsReRender(newBookings) {
+    // If status tab changed, need re-render
+    const currentFilteredCount = allBookings.filter(b => {
+        if (currentStatus === 'all') return true;
+        return b.status === currentStatus;
+    }).length;
+    
+    const newFilteredCount = newBookings.filter(b => {
+        if (currentStatus === 'all') return true;
+        return b.status === currentStatus;
+    }).length;
+    
+    // If counts differ or search/filters active, re-render
+    if (currentFilteredCount !== newFilteredCount) return true;
+    if (currentSearchTerm) return true;
+    if (currentDateFilter !== 'all') return true;
+    
+    return false;
+}
+
+// Update card statuses without full re-render (optimization)
+function updateCardStatuses(newBookings) {
+    const bookingCards = document.querySelectorAll('.booking-card');
+    
+    bookingCards.forEach(card => {
+        const bookingId = card.dataset.bookingId;
+        const updatedBooking = newBookings.find(b => b.id === bookingId);
+        
+        if (updatedBooking) {
+            // Update status badge
+            const statusBadge = card.querySelector('.status-badge');
+            if (statusBadge && updatedBooking.status !== allBookings.find(b => b.id === bookingId)?.status) {
+                const newStatusBadge = getStatusBadge(updatedBooking.status);
+                statusBadge.outerHTML = newStatusBadge;
+            }
+            
+            // Update payment badge
+            const paymentBadge = card.querySelector('.payment-badge');
+            if (paymentBadge && updatedBooking.paymentStatus !== allBookings.find(b => b.id === bookingId)?.paymentStatus) {
+                const newPaymentBadge = getPaymentStatusBadge(updatedBooking.paymentStatus);
+                paymentBadge.outerHTML = newPaymentBadge;
+            }
+            
+            // Update action buttons if status changed
+            const actionButtons = card.querySelector('.card-actions');
+            if (actionButtons && updatedBooking.status !== allBookings.find(b => b.id === bookingId)?.status) {
+                const newButtons = getCardActionButtons(updatedBooking);
+                actionButtons.innerHTML = newButtons;
+                
+                // Re-attach event listeners
+                attachCardActionListeners();
+            }
+        }
+    });
+}
+
+function stopPollingListener() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        console.log('Auto-refresh stopped');
+    }
+}
+
+// ============================================
+// GLOBAL VARIABLES
+// ============================================
+
+// DOM Elements
+const totalBookingsEl = document.getElementById('totalBookings');
+const todayBookingsEl = document.getElementById('todayBookings');
+const totalRevenueEl = document.getElementById('totalRevenue');
+const searchInput = document.getElementById('searchInput');
+const dateFilter = document.getElementById('dateFilter');
+const refreshBtn = document.getElementById('refreshBookingsBtn');
+const cardsContainer = document.getElementById('bookingsCardsContainer');
+const tableTitle = document.getElementById('tableTitle');
+const resultsCount = document.getElementById('resultsCount');
+
+// Modal elements
+const viewBookingModal = document.getElementById('viewBookingModal');
+const assignDriverModal = document.getElementById('assignDriverModal');
+const cancelBookingModal = document.getElementById('cancelBookingModal');
+const completeBookingModal = document.getElementById('completeBookingModal');
+const bookingDetailsContainer = document.getElementById('bookingDetailsContainer');
+const vehicleSelect = document.getElementById('vehicleSelect');
+const selectedBookingId = document.getElementById('selectedBookingId');
+const cancelBookingId = document.getElementById('cancelBookingId');
+const cancelReason = document.getElementById('cancelReason');
+const completeBookingId = document.getElementById('completeBookingId');
+const completionNotes = document.getElementById('completionNotes');
+const assignmentNotes = document.getElementById('assignmentNotes');
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', () => {
+    loadBookings();
+    setupEventListeners();
+    setupPollingListener(); // Use polling instead of Firebase
+});
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    stopPollingListener();
+});
+
+// Setup all event listeners
+function setupEventListeners() {
+    // Status tabs - save scroll before tab change
+    document.querySelectorAll('.status-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            saveScrollPosition();
+            document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            currentStatus = tab.dataset.status;
+            updateTableTitle();
+            
+            // Re-filter and render from existing data
+            const filteredByStatus = allBookings.filter(b => {
+                if (currentStatus === 'all') return true;
+                return b.status === currentStatus;
+            });
+            
+            // Update stats for this status
+            const stats = calculateStatusStats(filteredByStatus);
+            totalBookingsEl.textContent = filteredByStatus.length;
+            totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
+            
+            renderBookingsCards();
+            restoreScrollPosition();
+        });
+    });
+
+    // Search input with debounce
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            saveScrollPosition();
+            currentSearchTerm = e.target.value.toLowerCase();
+            renderBookingsCards();
+            restoreScrollPosition();
+        }, 300);
+    });
+
+    // Date filter
+    dateFilter.addEventListener('change', (e) => {
+        saveScrollPosition();
+        currentDateFilter = e.target.value;
+        renderBookingsCards();
+        restoreScrollPosition();
+    });
+
+    // Refresh button - force manual refresh
+    refreshBtn.addEventListener('click', () => {
+        saveScrollPosition();
+        loadBookings(true);
+        toastInfo('Manually refreshed', 'Refresh');
+        setTimeout(() => restoreScrollPosition(), 100);
+    });
+
+    // Modal close buttons
+    document.getElementById('closeViewBookingModal')?.addEventListener('click', () => {
+        viewBookingModal.style.display = 'none';
+    });
+    document.getElementById('closeModalFooterBtn')?.addEventListener('click', () => {
+        viewBookingModal.style.display = 'none';
+    });
+    document.getElementById('closeAssignDriverModal')?.addEventListener('click', () => {
+        assignDriverModal.style.display = 'none';
+    });
+    document.getElementById('closeCancelBookingModal')?.addEventListener('click', () => {
+        cancelBookingModal.style.display = 'none';
+    });
+    document.getElementById('closeCompleteBookingModal')?.addEventListener('click', () => {
+        completeBookingModal.style.display = 'none';
+    });
+    document.getElementById('cancelAssignBtn')?.addEventListener('click', () => {
+        assignDriverModal.style.display = 'none';
+    });
+    document.getElementById('cancelBookingBtn')?.addEventListener('click', () => {
+        cancelBookingModal.style.display = 'none';
+    });
+    document.getElementById('cancelCompleteBtn')?.addEventListener('click', () => {
+        completeBookingModal.style.display = 'none';
+    });
+
+    // Close modals when clicking overlay
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.style.display = 'none';
+            }
+        });
+    });
+
+    // Form submissions
+    document.getElementById('assignDriverForm')?.addEventListener('submit', handleAssignDriver);
+    document.getElementById('cancelBookingForm')?.addEventListener('submit', handleCancelBooking);
+    document.getElementById('completeBookingForm')?.addEventListener('submit', handleCompleteBooking);
+}
+
+// Update table title based on current status
+function updateTableTitle() {
+    const titles = {
+        'unassigned': 'Unassigned Self-Drive Bookings',
+        'assigned': 'Assigned Self-Drive Bookings',
+        'completed': 'Completed Self-Drive Bookings',
+        'cancelled': 'Cancelled Self-Drive Bookings',
+        'all': 'All Self-Drive Bookings'
+    };
+    tableTitle.textContent = titles[currentStatus] || 'Self-Drive Bookings';
+}
+
+// Calculate stats for a filtered booking list
+function calculateStatusStats(bookings) {
+    const today = new Date().toISOString().split('T')[0];
+    const todayCount = bookings.filter(b => {
+        if (b.date) {
+            const formattedDate = formatDateForComparison(b.date);
+            return formattedDate === today;
+        }
+        return false;
+    }).length;
+    
+    const revenue = bookings
+        .filter(b => b.paymentStatus === 'paid')
+        .reduce((sum, b) => sum + parseFloat(b.amount || 0), 0);
+    
+    return { todayCount, revenue };
+}
+
+// Load bookings from API (initial load or manual refresh)
+async function loadBookings(forceRefresh = false) {
+    try {
+        // Check cache for initial loads
+        if (!forceRefresh && bookingsCache.isValid() && allBookings.length > 0) {
+            console.log('Using cached data');
+            return;
+        }
+        
+        showLoadingState();
+        
+        const response = await apiRequest(`/api/common/self-drive/bookings?status=all&_t=${Date.now()}`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to load bookings');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update cache
+            bookingsCache.set(data);
+            
+            allBookings = data.bookings;
+            lastBookingIdsHash = getBookingsHash(allBookings);
+            
+            // Filter by current status for display
+            const filteredByStatus = allBookings.filter(b => {
+                if (currentStatus === 'all') return true;
+                return b.status === currentStatus;
+            });
+            
+            const stats = calculateStatusStats(filteredByStatus);
+            todayBookingsEl.textContent = stats.todayCount;
+            totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
+            
+            updateStatusCounts();
+            renderBookingsCards();
+            
+            const count = filteredByStatus.length;
+            if (count === 0) {
+                toastInfo(`No ${currentStatus} Self-Drive Booking bookings found`, 'Info');
+            } else if (forceRefresh) {
+                toastSuccess(`Refreshed ${count} ${currentStatus} Self-Drive Booking bookings`, 'Success');
+            }
+        } else {
+            toastError(data.message || 'Failed to load bookings', 'Error');
+        }
+    } catch (error) {
+        console.error('Error loading bookings:', error);
+        toastError('Unable to load bookings. Please try again.', 'Connection Error');
+        cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-exclamation-triangle"></i> Error loading bookings. Please refresh.</div>`;
+    }
+}
+
+// Show loading state
+function showLoadingState() {
+    if (allBookings.length === 0) {
+        cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-spinner fa-spin"></i> Loading Self-Drive Booking bookings...</div>`;
+    }
+}
+
+// Update statistics based on current status
+function updateStats() {
+    const filteredByStatus = allBookings.filter(b => {
+        if (currentStatus === 'all') return true;
+        return b.status === currentStatus;
+    });
+    
+    totalBookingsEl.textContent = filteredByStatus.length;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const todayBookings = filteredByStatus.filter(booking => {
+        const bookingDate = booking.date;
+        if (bookingDate) {
+            const formattedDate = formatDateForComparison(bookingDate);
+            return formattedDate === today;
+        }
+        return false;
+    }).length;
+    todayBookingsEl.textContent = todayBookings;
+    
+    let totalRevenue = 0;
+    if (currentStatus === 'unassigned' || currentStatus === 'assigned') {
+        totalRevenue = filteredByStatus
+            .filter(b => b.paymentStatus === 'paid')
+            .reduce((sum, b) => sum + parseFloat(b.amount || 0), 0);
+    }
+    totalRevenueEl.textContent = `₱${totalRevenue.toLocaleString()}`;
+}
+
+// Update status counts in tabs
+async function updateStatusCounts() {
+    try {
+        const response = await apiRequest('/api/common/self-drive/bookings/counts');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('unassignedCount').textContent = data.counts.unassigned || 0;
+            document.getElementById('assignedCount').textContent = data.counts.assigned || 0;
+            document.getElementById('completedCount').textContent = data.counts.completed || 0;
+            document.getElementById('cancelledCount').textContent = data.counts.cancelled || 0;
+            document.getElementById('allCount').textContent = data.counts.all || 0;
+        }
+    } catch (error) {
+        console.error('Error updating counts:', error);
+    }
+}
+
+// Format date for comparison
+function formatDateForComparison(dateStr) {
+    if (!dateStr) return null;
+    if (dateStr.includes('-')) {
+        const parts = dateStr.split('-');
+        if (parts[0].length === 4) {
+            return dateStr;
+        }
+        if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+            return `${parts[2]}-${parts[0]}-${parts[1]}`;
+        }
+    }
+    return dateStr;
+}
+
+// Filter by date range
+function filterByDate(booking) {
+    if (currentDateFilter === 'all') return true;
+    
+    const bookingDate = booking.date;
+    if (!bookingDate) return false;
+    
+    const comparableDate = formatDateForComparison(bookingDate);
+    const bookingDateObj = new Date(`${comparableDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    switch(currentDateFilter) {
+        case 'today':
+            const todayStr = formatDateForComparison(bookingDate);
+            return todayStr === new Date().toISOString().split('T')[0];
+        case 'tomorrow':
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            const bookingDateStr = formatDateForComparison(bookingDate);
+            return bookingDateStr === tomorrowStr;
+        case 'this_week':
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - today.getDay());
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            return bookingDateObj >= weekStart && bookingDateObj <= weekEnd;
+        case 'next_week':
+            const nextWeekStart = new Date(today);
+            nextWeekStart.setDate(today.getDate() + (7 - today.getDay()));
+            const nextWeekEnd = new Date(nextWeekStart);
+            nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+            return bookingDateObj >= nextWeekStart && bookingDateObj <= nextWeekEnd;
+        default:
+            return true;
+    }
+}
+
+// Render bookings as cards
+function renderBookingsCards() {
+    let filteredBookings = allBookings.filter(b => {
+        if (currentStatus === 'all') return true;
+        return b.status === currentStatus;
+    });
+    
+    if (currentSearchTerm) {
+        filteredBookings = filteredBookings.filter(booking => {
+            const searchableFields = [
+                booking.id,
+                booking.clientName,
+                booking.contactNumber,
+                booking.email,
+                booking.pickup,
+                booking.pickupLocation,
+                booking.returnLocation,
+                booking.transportUnit,
+                booking.vehicleType,
+                booking.duration,
+                booking.rateType
+            ];
+            return searchableFields.some(field => 
+                field && field.toLowerCase().includes(currentSearchTerm)
+            );
+        });
+    }
+    
+    filteredBookings = filteredBookings.filter(booking => filterByDate(booking));
+    
+    resultsCount.textContent = filteredBookings.length;
+    
+    if (filteredBookings.length === 0) {
+        cardsContainer.innerHTML = `<div class="loading-cards"><i class="fas fa-inbox"></i> No ${currentStatus} self-drive bookings found</div>`;
+        return;
+    }
+    
+    cardsContainer.innerHTML = filteredBookings.map(booking => renderBookingCard(booking)).join('');
+    attachCardActionListeners();
+}
+
+// Render a single booking card
+function renderBookingCard(booking) {
+    const date = formatReadableDate(booking.date);
+    const returnDate = formatReadableDate(booking.returnDate);
+    const time = booking.time || 'N/A';
+    const status = getStatusBadge(booking.status);
+    const amount = `PHP ${parseFloat(booking.amount || 0).toLocaleString()}`;
+    const payment = getPaymentStatusBadge(booking.paymentStatus);
+    const hasNote = booking.note && booking.note !== '';
+    const clientName = booking.clientName || 'N/A';
+    const contactNumber = booking.contactNumber || 'N/A';
+    const email = booking.email || 'N/A';
+    const pickup = booking.pickupLocation || booking.pickup || 'N/A';
+    const returnLocation = booking.returnLocation || booking.dropoff || pickup;
+    const vehicleType = booking.carType || booking.transportUnit || booking.vehicleType || 'N/A';
+    const duration = booking.rentalDuration || booking.duration || 'N/A';
+    const rateType = booking.rateType || booking.packageType || 'N/A';
+    const paymentMethod = booking.paymentMethod || 'N/A';
+    const note = booking.note || '';
+    
+    return `
+        <div class="booking-card" data-booking-id="${booking.id}">
+            <div class="card-header-section">
+                <div class="booking-ref"><i class="fas fa-ticket-alt"></i> ${escapeHtml(booking.id)}</div>
+                <div class="card-badges">${status}${payment}</div>
+            </div>
+            <div class="card-body">
+                <div class="info-row">
+                    <div class="info-item"><i class="fas fa-user"></i> <span><strong>${escapeHtml(clientName)}</strong></span></div>
+                    <div class="info-item"><i class="fas fa-phone"></i> <span>${escapeHtml(contactNumber)}</span></div>
+                    <div class="info-item"><i class="fas fa-envelope"></i> <span>${escapeHtml(email)}</span></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item"><i class="fas fa-calendar"></i> <span><strong>Pickup:</strong> ${date}</span></div>
+                    <div class="info-item"><i class="fas fa-clock"></i> <span><strong>Time:</strong> ${escapeHtml(time)}</span></div>
+                    <div class="info-item"><i class="fas fa-calendar-check"></i> <span><strong>Return:</strong> ${escapeHtml(booking.returnDateTime || returnDate)}</span></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-item"><i class="fas fa-car"></i> <span><strong>Vehicle:</strong> ${escapeHtml(vehicleType)}</span></div>
+                    <div class="info-item"><i class="fas fa-hourglass-half"></i> <span><strong>Duration:</strong> ${escapeHtml(String(duration))}</span></div>
+                    <div class="info-item"><i class="fas fa-tag"></i> <span><strong>Rate:</strong> ${escapeHtml(rateType)}</span></div>
+                </div>
+                <div class="location-section">
+                    <div class="location-row"><div class="location-label"><i class="fas fa-map-marker-alt"></i> PICKUP:</div><div class="location-value">${escapeHtml(pickup)}</div></div>
+                    <div class="location-row"><div class="location-label"><i class="fas fa-key"></i> DROPOFF:</div><div class="location-value">${escapeHtml(returnLocation)}</div></div>
+                </div>
+                <div class="note-card"><i class="fas fa-sticky-note"></i> <span><strong>Note:</strong> ${hasNote ? escapeHtml(note) : 'No notes available'}</span></div>
+                <div class="price-section">
+                    <div class="amount"><i class="fas fa-money-bill-wave"></i> ${amount}</div>
+                    <div class="payment-method"><i class="fas fa-credit-card"></i> ${escapeHtml(paymentMethod)}</div>
+                </div>
+                <div class="card-actions">${getCardActionButtons(booking)}</div>
+            </div>
+        </div>
+    `;
+}
+
+// Get action buttons for card based on status
+function getCardActionButtons(booking) {
+    const viewBtn = `<button class="card-action-btn btn-view-card" data-action="view" data-booking-id="${booking.id}"><i class="fas fa-file-alt"></i> View Details</button>`;
+    if (booking.status === 'unassigned') {
+        return `${viewBtn}<button class="card-action-btn btn-assign-card" data-action="assign" data-booking-id="${booking.id}"><i class="fas fa-car"></i> Assign Vehicle</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}"><i class="fas fa-trash"></i> Cancel</button>`;
+    } else if (booking.status === 'assigned') {
+        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}"><i class="fas fa-check"></i> Complete</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}"><i class="fas fa-trash"></i> Cancel</button>`;
+    }
+    return viewBtn;
+}
+
+// Get status badge
+function getStatusBadge(status) {
+    const badges = {
+        'unassigned': '<span class="status-badge status-unassigned"><i class="fas fa-clock"></i> Unassigned</span>',
+        'assigned': '<span class="status-badge status-assigned"><i class="fas fa-check"></i> Assigned</span>',
+        'completed': '<span class="status-badge status-completed"><i class="fas fa-check-circle"></i> Completed</span>',
+        'cancelled': '<span class="status-badge status-cancelled"><i class="fas fa-times-circle"></i> Cancelled</span>'
+    };
+    return badges[status] || `<span class="status-badge">${escapeHtml(status || 'unknown')}</span>`;
+}
+
+// Get payment status badge
+function getPaymentStatusBadge(status) {
+    const isPaid = status === 'paid';
+    const statusClass = isPaid ? 'status-paid' : 'status-pending';
+    const statusText = isPaid ? 'Paid' : 'Pending';
+    const icon = isPaid ? 'fa-check-circle' : 'fa-clock';
+    return `<span class="payment-badge ${statusClass}"><i class="fas ${icon}"></i> ${statusText}</span>`;
+}
+
+// Format readable date
+function formatReadableDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    try {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const date = parts[0].length === 4
+                ? new Date(`${dateStr}T00:00:00`)
+                : new Date(parts[2], parts[0] - 1, parts[1]);
+            return date.toLocaleDateString('en-PH', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                weekday: 'short'
+            });
+        }
+        return dateStr;
+    } catch {
+        return dateStr;
+    }
+}
+
+// Attach card action button listeners
+function attachCardActionListeners() {
+    document.querySelectorAll('[data-action="view"]').forEach(btn => {
+        btn.addEventListener('click', () => viewBookingDetails(btn.dataset.bookingId));
+    });
+    document.querySelectorAll('[data-action="assign"]').forEach(btn => {
+        btn.addEventListener('click', () => openAssignDriverModal(btn.dataset.bookingId));
+    });
+    document.querySelectorAll('[data-action="cancel"]').forEach(btn => {
+        btn.addEventListener('click', () => openCancelBookingModal(btn.dataset.bookingId));
+    });
+    document.querySelectorAll('[data-action="complete"]').forEach(btn => {
+        btn.addEventListener('click', () => openCompleteBookingModal(btn.dataset.bookingId));
+    });
+}
+
+// View booking details
+async function viewBookingDetails(bookingId) {
+    try {
+        const response = await apiRequest(`/api/common/self-drive/bookings/${bookingId}`);
+        const data = await response.json();
+        if (data.success) {
+            bookingDetailsContainer.innerHTML = renderBookingDetails(data.booking);
+            viewBookingModal.style.display = 'flex';
+        } else {
+            toastError('Failed to load booking details', 'Error');
+        }
+    } catch (error) {
+        console.error('Error viewing booking:', error);
+        toastError('Failed to load booking details', 'Error');
+    }
+}
+
+// Render booking details modal content
+function renderBookingDetails(booking) {
+    const pickupDateTime = `${formatReadableDate(booking.date)} at ${booking.time || 'N/A'}`;
+    const returnDate = formatReadableDate(booking.returnDate);
+    const amount = `PHP ${parseFloat(booking.amount || 0).toLocaleString()}`;
+    const originalAmount = booking.originalAmount ? `PHP ${parseFloat(booking.originalAmount).toLocaleString()}` : null;
+    return `
+        <div class="booking-details">
+            <div class="details-section">
+                <h4><i class="fas fa-clipboard-list"></i> Booking Information</h4>
+                <div class="details-grid">
+                    <div class="detail-item"><label>Booking Reference:</label><span><strong>${escapeHtml(booking.id)}</strong></span></div>
+                    <div class="detail-item"><label>Service Type:</label><span>Car Rental Self-Drive</span></div>
+                    <div class="detail-item"><label>Status:</label><span>${getStatusBadge(booking.status)}</span></div>
+                    <div class="detail-item"><label>Payment Status:</label><span>${getPaymentStatusBadge(booking.paymentStatus)}</span></div>
+                    <div class="detail-item"><label>Amount:</label><span><strong>${amount}</strong>${originalAmount ? `<br><small>Original: ${originalAmount}</small>` : ''}</span></div>
+                    <div class="detail-item"><label>Payment Method:</label><span>${escapeHtml(booking.paymentMethod || 'N/A')}</span></div>
+                </div>
+            </div>
+            <div class="details-section">
+                <h4><i class="fas fa-user"></i> Customer Information</h4>
+                <div class="details-grid">
+                    <div class="detail-item"><label>Name:</label><span>${escapeHtml(booking.clientName || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Contact Number:</label><span>${escapeHtml(booking.contactNumber || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Email:</label><span>${escapeHtml(booking.email || 'N/A')}</span></div>
+                </div>
+            </div>
+            <div class="details-section">
+                <h4><i class="fas fa-route"></i> Rental Details</h4>
+                <div class="details-grid">
+                    <div class="detail-item"><label>Pickup Location:</label><span>${escapeHtml(booking.pickupLocation || booking.pickup || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Dropoff Location:</label><span>${escapeHtml(booking.returnLocation || booking.dropoff || booking.pickupLocation || booking.pickup || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Pickup Date & Time:</label><span>${pickupDateTime}</span></div>
+                    <div class="detail-item"><label>Return Date & Time:</label><span>${escapeHtml(booking.returnDateTime || returnDate)}</span></div>
+                    <div class="detail-item"><label>Car Type:</label><span>${escapeHtml(booking.carType || booking.transportUnit || booking.vehicleType || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Rental Duration:</label><span>${escapeHtml(String(booking.rentalDuration || booking.duration || 'N/A'))}</span></div>
+                    <div class="detail-item"><label>Rate Type:</label><span>${escapeHtml(booking.rateType || booking.packageType || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Driver License Number:</label><span>${escapeHtml(booking.driverLicenseNumber || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Points Redeemed:</label><span>${booking.pointsRedeemed || 0} (PHP ${booking.pointsDiscount || 0} discount)</span></div>
+                </div>
+            </div>
+            ${booking.note ? `<div class="details-section"><h4><i class="fas fa-sticky-note"></i> Notes</h4><p class="flight-info">${escapeHtml(booking.note)}</p></div>` : ''}
+            ${booking.assigned_vehicle ? `<div class="details-section"><h4><i class="fas fa-check"></i> Assignment Details</h4><div class="details-grid"><div class="detail-item"><label>Vehicle:</label><span>${escapeHtml(booking.assigned_vehicle?.name || 'N/A')}</span></div><div class="detail-item"><label>Plate Number:</label><span>${escapeHtml(booking.assigned_vehicle?.plate_number || 'N/A')}</span></div><div class="detail-item"><label>Notes:</label><span>${escapeHtml(booking.assignment_notes || 'N/A')}</span></div></div></div>` : ''}
+        </div>
+    `;
+}
+
+// Open assign vehicle modal
+async function openAssignDriverModal(bookingId) {
+    try {
+        await loadVehicles();
+        selectedBookingId.value = bookingId;
+        assignDriverModal.style.display = 'flex';
+    } catch (error) {
+        console.error('Error opening assign modal:', error);
+        toastError('Failed to load assignment options', 'Error');
+    }
+}
+
+// Load available vehicles
+async function loadVehicles() {
+    try {
+        const response = await apiRequest('/api/common/self-drive/vehicles/available');
+        const data = await response.json();
+        
+        if (data.success && data.vehicles && data.vehicles.length > 0) {
+            vehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
+            data.vehicles.forEach(vehicle => {
+                const option = document.createElement('option');
+                option.value = vehicle.id;
+                option.textContent = `${vehicle.vehicle_name} - ${vehicle.plate_number}`;
+                vehicleSelect.appendChild(option);
+            });
+        } else {
+            vehicleSelect.innerHTML = '<option value="">No vehicles available</option>';
+            toastWarning('No vehicles available for assignment', 'Attention');
+        }
+    } catch (error) {
+        console.error('Error loading vehicles:', error);
+        vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+        toastError('Failed to load vehicles. Please try again.', 'Error');
+    }
+}
+
+// Handle assign vehicle
+async function handleAssignDriver(e) {
+    e.preventDefault();
+    const bookingId = selectedBookingId.value;
+    const vehicleId = vehicleSelect.value;
+    const notes = assignmentNotes.value;
+    if (!vehicleId) {
+        toastError('Please select a vehicle', 'Validation Error');
+        return;
+    }
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assigning...';
+    submitBtn.disabled = true;
+    try {
+        const response = await apiRequest(`/api/common/self-drive/bookings/${bookingId}/assign`, {
+            method: 'POST',
+            body: JSON.stringify({ vehicle_id: vehicleId, assignment_notes: notes })
+        });
+        const data = await response.json();
+        if (data.success) {
+            toastSuccess('Vehicle assigned successfully!', 'Assignment Complete');
+            assignDriverModal.style.display = 'none';
+            assignmentNotes.value = '';
+            vehicleSelect.value = '';
+            loadBookings(true);
+        } else {
+            toastError(data.message || 'Failed to assign vehicle', 'Assignment Failed');
+        }
+    } catch (error) {
+        console.error('Error assigning vehicle:', error);
+        toastError('Failed to assign vehicle', 'Error');
+    } finally {
+        submitBtn.innerHTML = originalBtnText;
+        submitBtn.disabled = false;
+    }
+}
+
+// Open cancel booking modal
+function openCancelBookingModal(bookingId) {
+    cancelBookingId.value = bookingId;
+    cancelReason.value = '';
+    cancelBookingModal.style.display = 'flex';
+}
+
+// Handle cancel booking
+async function handleCancelBooking(e) {
+    e.preventDefault();
+    const bookingId = cancelBookingId.value;
+    const reason = cancelReason.value;
+    
+    if (!reason) {
+        toastError('Please provide a cancellation reason', 'Validation Error');
+        return;
+    }
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await apiRequest(`/api/common/self-drive/bookings/${bookingId}/cancel`, {
+            method: 'POST',
+            body: JSON.stringify({ cancellation_reason: reason })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            toastSuccess('Booking cancelled successfully!', 'Cancelled');
+            cancelBookingModal.style.display = 'none';
+            cancelReason.value = '';
+            // Refresh data after cancellation
+            loadBookings(true);
+        } else {
+            toastError(data.message || 'Failed to cancel booking', 'Error');
+        }
+    } catch (error) {
+        console.error('Error cancelling booking:', error);
+        toastError('Failed to cancel booking', 'Error');
+    } finally {
+        submitBtn.innerHTML = originalBtnText;
+        submitBtn.disabled = false;
+    }
+}
+
+// Open complete booking modal
+function openCompleteBookingModal(bookingId) {
+    completeBookingId.value = bookingId;
+    completionNotes.value = '';
+    completeBookingModal.style.display = 'flex';
+}
+
+// Handle complete booking
+async function handleCompleteBooking(e) {
+    e.preventDefault();
+    const bookingId = completeBookingId.value;
+    const notes = completionNotes.value;
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Completing...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await apiRequest(`/api/common/self-drive/bookings/${bookingId}/complete`, {
+            method: 'POST',
+            body: JSON.stringify({ completion_notes: notes })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            toastSuccess('Booking marked as completed!', 'Complete');
+            completeBookingModal.style.display = 'none';
+            completionNotes.value = '';
+            // Refresh data after completion
+            loadBookings(true);
+        } else {
+            toastError(data.message || 'Failed to complete booking', 'Error');
+        }
+    } catch (error) {
+        console.error('Error completing booking:', error);
+        toastError('Failed to complete booking', 'Error');
+    } finally {
+        submitBtn.innerHTML = originalBtnText;
+        submitBtn.disabled = false;
+    }
+}
+
+// Utility functions
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Toast shortcuts
+function toastSuccess(message, title = 'Success!') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(title, message, 'success');
+    } else {
+        console.log('✅', title, message);
+    }
+}
+
+function toastError(message, title = 'Error!') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(title, message, 'error');
+    } else {
+        console.log('❌', title, message);
+    }
+}
+
+function toastWarning(message, title = 'Warning!') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(title, message, 'warning');
+    } else {
+        console.log('⚠️', title, message);
+    }
+}
+
+function toastInfo(message, title = 'Info') {
+    if (typeof window.showToast === 'function') {
+        window.showToast(title, message, 'info');
+    } else {
+        console.log('ℹ️', title, message);
+    }
+}
