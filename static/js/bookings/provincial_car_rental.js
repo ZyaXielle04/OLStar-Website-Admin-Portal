@@ -57,7 +57,7 @@ let currentDateFilter = 'all';
 let currentDestinationFilter = 'all';
 let currentTripTypeFilter = 'all';
 let currentDurationFilter = 'all';
-const BOOKING_CARD_COLORS = ['white', 'yellow', 'red', 'green'];
+const BOOKING_CARD_COLORS = ['white', 'yellow', 'red', 'green', 'pink', 'blue'];
 
 // Cache for bookings data
 let bookingsCache = {

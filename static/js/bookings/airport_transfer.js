@@ -54,7 +54,7 @@ let allBookings = [];
 let currentStatus = 'unassigned';
 let currentSearchTerm = '';
 let currentDateFilter = 'all';
-const BOOKING_CARD_COLORS = ['white', 'yellow', 'red', 'green'];
+const BOOKING_CARD_COLORS = ['white', 'yellow', 'red', 'green', 'pink', 'blue'];
 
 // Cache for bookings data
 let bookingsCache = {

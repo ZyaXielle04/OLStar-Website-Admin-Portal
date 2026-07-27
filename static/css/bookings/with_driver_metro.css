@@ -1106,3 +1106,35 @@
     white-space: nowrap;
     font-weight: 500;
 }
+/* Additional admin indicator colors */
+.booking-card-color-pink {
+    border-color: #ec4899;
+    box-shadow: 0 0 0 1px rgba(236, 72, 153, 0.34), 0 0 18px rgba(236, 72, 153, 0.24);
+}
+
+.booking-card-color-blue {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.34), 0 0 18px rgba(59, 130, 246, 0.24);
+}
+
+.booking-card-color-pink:hover {
+    border-color: #ec4899;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(236, 72, 153, 0.34), 0 0 18px rgba(236, 72, 153, 0.24);
+}
+
+.booking-card-color-blue:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(59, 130, 246, 0.34), 0 0 18px rgba(59, 130, 246, 0.24);
+}
+
+.booking-color-marker[data-color="pink"],
+.booking-color-option[data-color="pink"] {
+    background: #ec4899;
+    border-color: #db2777;
+}
+
+.booking-color-marker[data-color="blue"],
+.booking-color-option[data-color="blue"] {
+    background: #3b82f6;
+    border-color: #2563eb;
+}

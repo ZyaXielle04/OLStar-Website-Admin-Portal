@@ -374,7 +374,7 @@ def update_provincial_booking_color(booking_id):
     try:
         data = request.get_json() or {}
         color = data.get('color', 'white')
-        valid_colors = {'white', 'yellow', 'red', 'green'}
+        valid_colors = {'white', 'yellow', 'red', 'green', 'pink', 'blue'}
 
         if color not in valid_colors:
             return jsonify({'success': False, 'message': 'Invalid color'}), 400
