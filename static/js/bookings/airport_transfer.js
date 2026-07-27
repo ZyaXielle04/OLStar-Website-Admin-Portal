@@ -171,6 +171,7 @@ function getBookingsHash(bookings) {
     return JSON.stringify(bookings.map(b => ({
         id: b.id,
         status: b.status,
+        color: b.color || 'white',
         updatedAt: b.updatedAt || b.timestamp
     })));
 }

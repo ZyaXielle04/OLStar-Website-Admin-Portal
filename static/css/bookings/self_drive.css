@@ -975,3 +975,110 @@
         padding: 1rem;
     }
 }
+/* Admin color indicator */
+.booking-card-color-yellow {
+    border-color: #facc15;
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.38), 0 0 18px rgba(250, 204, 21, 0.28);
+}
+
+.booking-card-color-red {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.34), 0 0 18px rgba(239, 68, 68, 0.24);
+}
+
+.booking-card-color-green {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.34), 0 0 18px rgba(34, 197, 94, 0.24);
+}
+
+.booking-card-color-yellow:hover {
+    border-color: #facc15;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(250, 204, 21, 0.38), 0 0 18px rgba(250, 204, 21, 0.28);
+}
+
+.booking-card-color-red:hover {
+    border-color: #ef4444;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(239, 68, 68, 0.34), 0 0 18px rgba(239, 68, 68, 0.24);
+}
+
+.booking-card-color-green:hover {
+    border-color: #22c55e;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(34, 197, 94, 0.34), 0 0 18px rgba(34, 197, 94, 0.24);
+}
+
+.card-badges {
+    align-items: center;
+}
+
+.booking-color-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.booking-color-marker,
+.booking-color-option {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    cursor: pointer;
+    padding: 0;
+}
+
+.booking-color-marker[data-color="yellow"],
+.booking-color-option[data-color="yellow"] {
+    background: #facc15;
+    border-color: #d4a900;
+}
+
+.booking-color-marker[data-color="red"],
+.booking-color-option[data-color="red"] {
+    background: #ef4444;
+    border-color: #dc2626;
+}
+
+.booking-color-marker[data-color="green"],
+.booking-color-option[data-color="green"] {
+    background: #22c55e;
+    border-color: #16a34a;
+}
+
+.booking-color-options {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 10;
+    display: none;
+    gap: 0.4rem;
+    padding: 0.45rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.booking-color-picker.is-open .booking-color-options {
+    display: flex;
+}
+.booking-ref {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+}
+
+.booking-ref-item {
+    color: #111827;
+    background: #f3f4f6;
+    padding: 0.35rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    font-weight: 500;
+}

@@ -56,6 +56,7 @@ let currentSearchTerm = '';
 let currentDateFilter = 'all';
 let currentAreaFilter = 'all';
 let currentDurationFilter = 'all';
+const BOOKING_CARD_COLORS = ['white', 'yellow', 'red', 'green'];
 
 // Cache for bookings data
 let bookingsCache = {
@@ -78,6 +79,78 @@ let bookingsCache = {
     }
 };
 
+
+function getBookingCardColor(booking) {
+    const color = booking.color || 'white';
+    return BOOKING_CARD_COLORS.includes(color) ? color : 'white';
+}
+
+async function setBookingCardColor(bookingId, color) {
+    if (!BOOKING_CARD_COLORS.includes(color)) return;
+
+    const card = document.querySelector(`.booking-card[data-booking-id="${CSS.escape(bookingId)}"]`);
+    const previousColor = BOOKING_CARD_COLORS.find(c => card?.classList.contains(`booking-card-color-${c}`)) || 'white';
+    if (card) {
+        card.classList.remove(...BOOKING_CARD_COLORS.map(c => `booking-card-color-${c}`));
+        card.classList.add(`booking-card-color-${color}`);
+    }
+
+    const marker = document.querySelector(`.booking-color-marker[data-booking-id="${CSS.escape(bookingId)}"]`);
+    if (marker) {
+        marker.dataset.color = color;
+        marker.setAttribute('aria-label', `Card color: ${color}`);
+    }
+
+    try {
+        const response = await apiRequest(`/api/common/with-driver-metro/bookings/${bookingId}/color`, {
+            method: 'PATCH',
+            body: JSON.stringify({ color })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Failed to update color');
+        }
+
+        const booking = allBookings.find(b => b.id === bookingId);
+        if (booking) booking.color = color;
+        bookingsCache.clear();
+    } catch (error) {
+        console.error('Error updating booking color:', error);
+        toastError('Failed to save color indicator', 'Error');
+
+        if (card) {
+            card.classList.remove(...BOOKING_CARD_COLORS.map(c => `booking-card-color-${c}`));
+            card.classList.add(`booking-card-color-${previousColor}`);
+        }
+
+        if (marker) {
+            marker.dataset.color = previousColor;
+            marker.setAttribute('aria-label', `Card color: ${previousColor}`);
+        }
+    }
+}
+
+function renderColorPicker(bookingId, selectedColor) {
+    return `
+        <div class="booking-color-picker">
+            <button type="button"
+                    class="booking-color-marker"
+                    data-booking-id="${escapeHtml(bookingId)}"
+                    data-color="${escapeHtml(selectedColor)}"
+                    aria-label="Card color: ${escapeHtml(selectedColor)}"></button>
+            <div class="booking-color-options" role="menu">
+                ${BOOKING_CARD_COLORS.map(color => `
+                    <button type="button"
+                            class="booking-color-option"
+                            data-booking-id="${escapeHtml(bookingId)}"
+                            data-color="${color}"
+                            aria-label="Set card color to ${color}"></button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
 function saveScrollPosition() {
     lastScrollPosition = window.scrollY;
 }
@@ -97,6 +170,7 @@ function getBookingsHash(bookings) {
     return JSON.stringify(bookings.map(b => ({
         id: b.id,
         status: b.status,
+        color: b.color || 'white',
         updatedAt: b.updatedAt || b.timestamp
     })));
 }
@@ -387,6 +461,14 @@ function setupEventListeners() {
         });
     });
 
+
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.booking-color-picker')) {
+            document.querySelectorAll('.booking-color-picker.is-open').forEach(picker => {
+                picker.classList.remove('is-open');
+            });
+        }
+    });
     document.getElementById('assignDriverForm')?.addEventListener('submit', handleAssignDriver);
     document.getElementById('completeTripForm')?.addEventListener('submit', handleCompleteTrip);
     document.getElementById('cancelBookingForm')?.addEventListener('submit', handleCancelBooking);
@@ -648,16 +730,20 @@ function renderBookingCard(booking) {
     const duration = booking.duration || 'N/A';
     const packageType = booking.package || booking.packageType || 'N/A';
     const vehicleType = booking.vehicleType || 'N/A';
+    const cardColor = getBookingCardColor(booking);
     
     return `
-        <div class="booking-card" data-booking-id="${booking.id}">
+        <div class="booking-card booking-card-color-${cardColor}" data-booking-id="${booking.id}">
             <div class="card-header-section">
                 <div class="booking-ref">
-                    🎫 ${escapeHtml(booking.id)}
+                    <div class="booking-ref-item"><strong>Booking ID:</strong> ${escapeHtml(booking.id)}</div>
+                    <div class="booking-ref-item"><strong>Trip Date & Time:</strong> ${escapeHtml(travelDate)} at ${escapeHtml(booking.pickupTime || 'Flexible')}</div>
+                    <div class="booking-ref-item"><strong>Record Timestamp:</strong> ${formatDateTime(booking.timestamp)}</div>
                 </div>
                 <div class="card-badges">
                     ${status}
                     ${payment}
+                    ${renderColorPicker(booking.id, cardColor)}
                 </div>
             </div>
             
@@ -771,6 +857,18 @@ function formatReadableDate(dateStr) {
     }
 }
 
+function formatDateTime(value) {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return escapeHtml(value);
+    return date.toLocaleString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
 function attachCardActionListeners() {
     document.querySelectorAll('[data-action="view"]').forEach(btn => {
         btn.addEventListener('click', () => viewBookingDetails(btn.dataset.bookingId));
@@ -786,6 +884,24 @@ function attachCardActionListeners() {
     });
     document.querySelectorAll('[data-action="reassign"]').forEach(btn => {
         btn.addEventListener('click', () => openReassignDriverModal(btn.dataset.bookingId));
+    });
+    document.querySelectorAll('.booking-color-marker').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            document.querySelectorAll('.booking-color-picker.is-open').forEach(picker => {
+                if (picker !== btn.closest('.booking-color-picker')) {
+                    picker.classList.remove('is-open');
+                }
+            });
+            btn.closest('.booking-color-picker')?.classList.toggle('is-open');
+        });
+    });
+    document.querySelectorAll('.booking-color-option').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            setBookingCardColor(btn.dataset.bookingId, btn.dataset.color);
+            btn.closest('.booking-color-picker')?.classList.remove('is-open');
+        });
     });
 }
 
