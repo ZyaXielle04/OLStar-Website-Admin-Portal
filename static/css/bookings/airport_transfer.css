@@ -348,19 +348,24 @@
 }
 
 .booking-ref {
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #111827;
-    background: #f3f4f6;
-    padding: 0.3rem 0.8rem;
-    border-radius: 20px;
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.5rem;
 }
 
 .booking-ref i {
     color: #2563eb;
+}
+
+.booking-ref-item {
+    color: #111827;
+    background: #f3f4f6;
+    padding: 0.35rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    line-height: 1.3;
+    white-space: nowrap;
 }
 
 .card-badges {

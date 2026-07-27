@@ -640,16 +640,18 @@ function renderBookingCard(booking) {
     const status = getStatusBadge(booking.status);
     const amount = `₱${parseFloat(booking.amount || 0).toLocaleString()}`;
     const payment = getPaymentStatusBadge(booking.paymentStatus);
-    const hasFlightNumber = booking.flight_number && booking.flight_number !== 'N/A' && booking.flight_number !== '';
+    const flightNumber = (booking.flightNumber || booking.flight_number || 'N/A').toString().toUpperCase();
+    const hasFlightNumber = flightNumber && flightNumber !== 'N/A' && flightNumber !== '';
     const hasNote = booking.note && booking.note !== '';
     
     const clientName = booking.clientName || 'N/A';
     const contactNumber = booking.contactNumber || 'N/A';
+    const whatsappNumber = booking.whatsappNumber || '';
     const email = booking.email || 'N/A';
     const pickup = booking.pickup || 'N/A';
     const dropoff = booking.dropoff || 'N/A';
     const packageType = booking.packageType || 'N/A';
-    const flightNumber = booking.flight_number || 'N/A';
+    const passengers = booking.passengers || 'N/A';
     const paymentMethod = booking.paymentMethod || 'N/A';
     const note = booking.note || '';
     
@@ -657,7 +659,9 @@ function renderBookingCard(booking) {
         <div class="booking-card" data-booking-id="${booking.id}">
             <div class="card-header-section">
                 <div class="booking-ref">
-                    🎫 ${escapeHtml(booking.id)}
+                    <div class="booking-ref-item"><strong>Booking ID:</strong> ${escapeHtml(booking.id)}</div>
+                    <div class="booking-ref-item"><strong>Trip Date & Time:</strong> ${escapeHtml(date)} at ${escapeHtml(time)}</div>
+                    <div class="booking-ref-item"><strong>Record Timestamp:</strong> ${formatDateTime(booking.timestamp)}</div>
                 </div>
                 <div class="card-badges">
                     ${status}
@@ -667,15 +671,15 @@ function renderBookingCard(booking) {
             
             <div class="card-body">
                 <div class="info-row">
-                    <div class="info-item">👤 <span><strong>${escapeHtml(clientName)}</strong></span></div>
-                    <div class="info-item">📞 <span>${escapeHtml(contactNumber)}</span></div>
-                    <div class="info-item">✉️ <span>${escapeHtml(email)}</span></div>
+                    <div class="info-item"><span><strong>Name:</strong> ${escapeHtml(clientName)}</span></div>
+                    <div class="info-item"><span><strong>Contact:</strong> ${escapeHtml(contactNumber)}</span></div>
+                    <div class="info-item"><span><strong>Email:</strong> ${escapeHtml(email)}</span></div>
                 </div>
                 
                 <div class="info-row">
-                    <div class="info-item">📅 <span><strong>Date:</strong> ${date}</span></div>
-                    <div class="info-item">⏰ <span><strong>Time:</strong> ${escapeHtml(time)}</span></div>
+                    <div class="info-item"><span><strong>Passengers:</strong> ${escapeHtml(String(passengers))}</span></div>
                     <div class="info-item">🏷️ <span><strong>Package:</strong> ${escapeHtml(packageType)}</span></div>
+                    <div class="info-item"><span><strong>WhatsApp:</strong> ${escapeHtml(whatsappNumber || 'N/A')}</span></div>
                 </div>
                 
                 <div class="location-section">
@@ -691,7 +695,7 @@ function renderBookingCard(booking) {
                 
                 ${hasFlightNumber && flightNumber !== 'N/A' ? `
                 <div class="flight-info-card">
-                    ✈️ <span><strong>Flight Number:</strong> ${escapeHtml(flightNumber)}</span>
+                    <span><strong>Flight Number:</strong> ${escapeHtml(flightNumber)}</span>
                 </div>
                 ` : ''}
                 
@@ -801,6 +805,10 @@ async function viewBookingDetails(bookingId) {
 // Render booking details modal content
 function renderBookingDetails(booking) {
     const pickupDateTime = `${formatReadableDate(booking.date)} at ${booking.time || 'N/A'}`;
+    const currency = booking.paidCurrency || 'PHP';
+    const amount = `${currency} ${parseFloat(booking.amount || 0).toLocaleString()}`;
+    const flightNumber = (booking.flightNumber || booking.flight_number || 'N/A').toString().toUpperCase();
+    const passengers = booking.passengers || 'N/A';
     
     return `
         <div class="booking-details">
@@ -808,11 +816,18 @@ function renderBookingDetails(booking) {
                 <h4>📋 Booking Information</h4>
                 <div class="details-grid">
                     <div class="detail-item"><label>🎫 Booking Reference:</label><span><strong>${escapeHtml(booking.id)}</strong></span></div>
-                    <div class="detail-item"><label>🚗 Service Type:</label><span>Airport Transfer</span></div>
+                    <div class="detail-item"><label>Trip Date & Time:</label><span>${pickupDateTime}</span></div>
+                    <div class="detail-item"><label>Record Timestamp:</label><span>${formatDateTime(booking.timestamp)}</span></div>
+                    <div class="detail-item"><label>🚗 Service Type:</label><span>Airport Transfer</span></div>
+                    <div class="detail-item"><label>Client ID:</label><span>${escapeHtml(booking.clientId || 'N/A')}</span></div>
                     <div class="detail-item"><label>📊 Status:</label><span>${getStatusBadge(booking.status)}</span></div>
-                    <div class="detail-item"><label>💳 Payment Status:</label><span>${getPaymentStatusBadge(booking.paymentStatus)}</span></div>
-                    <div class="detail-item"><label>💰 Amount:</label><span><strong>₱${parseFloat(booking.amount || 0).toLocaleString()}</strong></span></div>
-                    <div class="detail-item"><label>💎 Payment Method:</label><span>${escapeHtml(booking.paymentMethod || 'N/A')}</span></div>
+                    <div class="detail-item"><label>💳 Payment Status:</label><span>${getPaymentStatusBadge(booking.paymentStatus)}</span></div>
+                    <div class="detail-item"><label>Source:</label><span>${escapeHtml(booking.source || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Amount:</label><span><strong>${escapeHtml(amount)}</strong></span></div>
+                    <div class="detail-item"><label>Currency:</label><span>${escapeHtml(currency)}</span></div>
+                    <div class="detail-item"><label>💎 Payment Method:</label><span>${escapeHtml(booking.paymentMethod || 'N/A')}</span></div>
+                    <div class="detail-item"><label>PayMongo Intent:</label><span>${escapeHtml(booking.paymongoPaymentIntentId || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Paid At:</label><span>${formatDateTime(booking.paidAt)}</span></div>
                 </div>
             </div>
             
@@ -820,7 +835,8 @@ function renderBookingDetails(booking) {
                 <h4>👤 Customer Information</h4>
                 <div class="details-grid">
                     <div class="detail-item"><label>👤 Name:</label><span>${escapeHtml(booking.clientName || 'N/A')}</span></div>
-                    <div class="detail-item"><label>📞 Contact Number:</label><span>${escapeHtml(booking.contactNumber || 'N/A')}</span></div>
+                    <div class="detail-item"><label>📞 Contact Number:</label><span>${escapeHtml(booking.contactNumber || 'N/A')}</span></div>
+                    <div class="detail-item"><label>WhatsApp Number:</label><span>${escapeHtml(booking.whatsappNumber || 'N/A')}</span></div>
                     <div class="detail-item"><label>✉️ Email:</label><span>${escapeHtml(booking.email || 'N/A')}</span></div>
                 </div>
             </div>
@@ -830,9 +846,9 @@ function renderBookingDetails(booking) {
                 <div class="details-grid">
                     <div class="detail-item"><label>📍 Pickup Location:</label><span>${escapeHtml(booking.pickup || 'N/A')}</span></div>
                     <div class="detail-item"><label>🏁 Dropoff Location:</label><span>${escapeHtml(booking.dropoff || 'N/A')}</span></div>
-                    <div class="detail-item"><label>📅 Pickup Date & Time:</label><span>${pickupDateTime}</span></div>
-                    <div class="detail-item"><label>✈️ Flight Number:</label><span>${escapeHtml(booking.flight_number || 'N/A')}</span></div>
-                    <div class="detail-item"><label>🏷️ Package Type:</label><span>${escapeHtml(booking.packageType || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Flight Number:</label><span>${escapeHtml(flightNumber)}</span></div>
+                    <div class="detail-item"><label>🏷️ Package Type:</label><span>${escapeHtml(booking.packageType || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Passengers:</label><span>${escapeHtml(String(passengers))}</span></div>
                 </div>
             </div>
             
@@ -1047,6 +1063,18 @@ async function handleCompleteBooking(e) {
     }
 }
 
+function formatDateTime(value) {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return escapeHtml(value);
+    return date.toLocaleString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
 // Utility functions
 function escapeHtml(text) {
     if (!text) return '';
