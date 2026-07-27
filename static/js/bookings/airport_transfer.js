@@ -54,6 +54,7 @@ let allBookings = [];
 let currentStatus = 'unassigned';
 let currentSearchTerm = '';
 let currentDateFilter = 'all';
+const BOOKING_CARD_COLORS = ['white', 'yellow', 'red', 'green'];
 
 // Cache for bookings data
 let bookingsCache = {
@@ -75,6 +76,78 @@ let bookingsCache = {
         this.timestamp = null;
     }
 };
+
+function getBookingCardColor(booking) {
+    const color = booking.color || 'white';
+    return BOOKING_CARD_COLORS.includes(color) ? color : 'white';
+}
+
+async function setBookingCardColor(bookingId, color) {
+    if (!BOOKING_CARD_COLORS.includes(color)) return;
+
+    const card = document.querySelector(`.booking-card[data-booking-id="${CSS.escape(bookingId)}"]`);
+    const previousColor = BOOKING_CARD_COLORS.find(c => card?.classList.contains(`booking-card-color-${c}`)) || 'white';
+    if (card) {
+        card.classList.remove(...BOOKING_CARD_COLORS.map(c => `booking-card-color-${c}`));
+        card.classList.add(`booking-card-color-${color}`);
+    }
+
+    const marker = document.querySelector(`.booking-color-marker[data-booking-id="${CSS.escape(bookingId)}"]`);
+    if (marker) {
+        marker.dataset.color = color;
+        marker.setAttribute('aria-label', `Card color: ${color}`);
+    }
+
+    try {
+        const response = await apiRequest(`/api/common/airport-transfer/bookings/${bookingId}/color`, {
+            method: 'PATCH',
+            body: JSON.stringify({ color })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.message || 'Failed to update color');
+        }
+
+        const booking = allBookings.find(b => b.id === bookingId);
+        if (booking) booking.color = color;
+        bookingsCache.clear();
+    } catch (error) {
+        console.error('Error updating booking color:', error);
+        toastError('Failed to save color indicator', 'Error');
+
+        if (card) {
+            card.classList.remove(...BOOKING_CARD_COLORS.map(c => `booking-card-color-${c}`));
+            card.classList.add(`booking-card-color-${previousColor}`);
+        }
+
+        if (marker) {
+            marker.dataset.color = previousColor;
+            marker.setAttribute('aria-label', `Card color: ${previousColor}`);
+        }
+    }
+}
+
+function renderColorPicker(bookingId, selectedColor) {
+    return `
+        <div class="booking-color-picker">
+            <button type="button"
+                    class="booking-color-marker"
+                    data-booking-id="${escapeHtml(bookingId)}"
+                    data-color="${escapeHtml(selectedColor)}"
+                    aria-label="Card color: ${escapeHtml(selectedColor)}"></button>
+            <div class="booking-color-options" role="menu">
+                ${BOOKING_CARD_COLORS.map(color => `
+                    <button type="button"
+                            class="booking-color-option"
+                            data-booking-id="${escapeHtml(bookingId)}"
+                            data-color="${color}"
+                            aria-label="Set card color to ${color}"></button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
 
 // Save current scroll position
 function saveScrollPosition() {
@@ -400,6 +473,14 @@ function setupEventListeners() {
         });
     });
 
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.booking-color-picker')) {
+            document.querySelectorAll('.booking-color-picker.is-open').forEach(picker => {
+                picker.classList.remove('is-open');
+            });
+        }
+    });
+
     // Form submissions
     document.getElementById('assignDriverForm')?.addEventListener('submit', handleAssignDriver);
     document.getElementById('cancelBookingForm')?.addEventListener('submit', handleCancelBooking);
@@ -654,9 +735,10 @@ function renderBookingCard(booking) {
     const passengers = booking.passengers || 'N/A';
     const paymentMethod = booking.paymentMethod || 'N/A';
     const note = booking.note || '';
+    const cardColor = getBookingCardColor(booking);
     
     return `
-        <div class="booking-card" data-booking-id="${booking.id}">
+        <div class="booking-card booking-card-color-${cardColor}" data-booking-id="${booking.id}">
             <div class="card-header-section">
                 <div class="booking-ref">
                     <div class="booking-ref-item"><strong>Booking ID:</strong> ${escapeHtml(booking.id)}</div>
@@ -666,6 +748,7 @@ function renderBookingCard(booking) {
                 <div class="card-badges">
                     ${status}
                     ${payment}
+                    ${renderColorPicker(booking.id, cardColor)}
                 </div>
             </div>
             
@@ -782,6 +865,24 @@ function attachCardActionListeners() {
     });
     document.querySelectorAll('[data-action="complete"]').forEach(btn => {
         btn.addEventListener('click', () => openCompleteBookingModal(btn.dataset.bookingId));
+    });
+    document.querySelectorAll('.booking-color-marker').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            document.querySelectorAll('.booking-color-picker.is-open').forEach(picker => {
+                if (picker !== btn.closest('.booking-color-picker')) {
+                    picker.classList.remove('is-open');
+                }
+            });
+            btn.closest('.booking-color-picker')?.classList.toggle('is-open');
+        });
+    });
+    document.querySelectorAll('.booking-color-option').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            setBookingCardColor(btn.dataset.bookingId, btn.dataset.color);
+            btn.closest('.booking-color-picker')?.classList.remove('is-open');
+        });
     });
 }
 

@@ -160,6 +160,7 @@ def format_booking_response(booking):
         'paymentMethod': booking.get('paymentMethod', 'N/A'),
         'paymongoPaymentIntentId': booking.get('paymongoPaymentIntentId', ''),
         'status': booking.get('status', 'unassigned'),
+        'color': booking.get('color', 'white'),
         'source': booking.get('source', ''),
         'date': booking.get('date', ''),
         'time': booking.get('time', ''),
@@ -345,6 +346,37 @@ def assign_driver_to_airport_transfer(booking_id):
         
     except Exception as e:
         print(f"Error assigning driver: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@airport_transfer_bp.route('/common/airport-transfer/bookings/<booking_id>/color', methods=['PATCH'])
+@login_required_api
+@role_required_api(['superadmin', 'admin'])
+def update_airport_transfer_booking_color(booking_id):
+    """Update the admin color indicator for a booking."""
+    try:
+        data = request.get_json() or {}
+        color = data.get('color', 'white')
+        valid_colors = {'white', 'yellow', 'red', 'green'}
+
+        if color not in valid_colors:
+            return jsonify({'success': False, 'message': 'Invalid color'}), 400
+
+        booking_ref = db.reference(f'/pendingBooking/{booking_id}')
+        booking_data = booking_ref.get()
+
+        if not booking_data:
+            return jsonify({'success': False, 'message': 'Booking not found'}), 404
+
+        if booking_data.get('bookingType') != SERVICE_TYPE:
+            return jsonify({'success': False, 'message': 'Not an airport transfer booking'}), 400
+
+        booking_ref.update({'color': color})
+        invalidate_cache()
+
+        return jsonify({'success': True, 'message': 'Color updated successfully', 'color': color}), 200
+
+    except Exception as e:
+        print(f"Error updating booking color: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @airport_transfer_bp.route('/common/airport-transfer/bookings/<booking_id>/cancel', methods=['POST'])
