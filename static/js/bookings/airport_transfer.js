@@ -846,8 +846,8 @@ function renderBookingDetails(booking) {
 // Open assign driver modal
 async function openAssignDriverModal(bookingId) {
     try {
-        await loadDrivers();
-        await loadVehicles();
+        await loadDrivers(bookingId);
+        await loadVehicles(bookingId);
         selectedBookingId.value = bookingId;
         assignDriverModal.style.display = 'flex';
     } catch (error) {
@@ -857,9 +857,10 @@ async function openAssignDriverModal(bookingId) {
 }
 
 // Load available drivers
-async function loadDrivers() {
+async function loadDrivers(bookingId = null) {
     try {
-        const response = await apiRequest('/api/common/airport-transfer/drivers/available');
+        const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : '';
+        const response = await apiRequest(`/api/common/airport-transfer/drivers/available${query}`);
         const data = await response.json();
         
         if (data.success && data.drivers && data.drivers.length > 0) {
@@ -882,9 +883,10 @@ async function loadDrivers() {
 }
 
 // Load available vehicles
-async function loadVehicles() {
+async function loadVehicles(bookingId = null) {
     try {
-        const response = await apiRequest('/api/common/airport-transfer/vehicles/available');
+        const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : '';
+        const response = await apiRequest(`/api/common/airport-transfer/vehicles/available${query}`);
         const data = await response.json();
         
         if (data.success && data.vehicles && data.vehicles.length > 0) {

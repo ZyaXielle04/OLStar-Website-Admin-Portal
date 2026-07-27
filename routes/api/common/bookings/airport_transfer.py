@@ -309,7 +309,7 @@ def assign_driver_to_airport_transfer(booking_id):
         
         if not vehicle_data:
             return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
-        
+
         # Update the booking - change status to 'assigned'
         update_data = {
             'status': 'assigned',
@@ -459,20 +459,8 @@ def get_available_drivers():
 @role_required_api(['superadmin', 'admin'])
 @cached(timeout=60)
 def get_available_vehicles():
-    """Get all available vehicles, not currently assigned to active bookings"""
+    """Get all available vehicles."""
     try:
-        # Get current bookings to check which vehicles are already assigned
-        all_bookings = get_all_airport_transfer_bookings()
-        assigned_vehicle_ids = set()
-        
-        # Find vehicles currently assigned to active bookings
-        for booking in all_bookings:
-            status = booking.get('status')
-            if status in ['assigned', 'in_progress']:  # Active bookings
-                assigned_vehicle = booking.get('assigned_vehicle')
-                if assigned_vehicle and assigned_vehicle.get('id'):
-                    assigned_vehicle_ids.add(assigned_vehicle.get('id'))
-        
         units_ref = db.reference('transportUnits')
         all_units = units_ref.get()
         
@@ -484,11 +472,7 @@ def get_available_vehicles():
         for unit_id, unit_data in all_units.items():
             is_available = unit_data.get('isAvailable', True)
             
-            # Check if vehicle is already assigned to an active booking
-            is_assigned = unit_id in assigned_vehicle_ids
-            
-            # Vehicle is available if: marked available AND not assigned to active booking
-            if is_available and not is_assigned:
+            if is_available:
                 available_vehicles.append({
                     'id': unit_id,
                     'vehicle_name': unit_data.get('transportUnit', 'N/A'),

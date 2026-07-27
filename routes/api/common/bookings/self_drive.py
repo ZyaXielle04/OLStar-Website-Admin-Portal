@@ -79,8 +79,23 @@ def log_request(f):
 # ============================================
 
 def is_self_drive_booking(booking_data):
-    booking_type = booking_data.get('bookingType') or booking_data.get('serviceType') or booking_data.get('rentalType')
-    return booking_type in {'selfDrive', 'self-drive', 'carRentalSelfDrive', 'selfDriveCarRental'}
+    """Check if a booking is a self-drive booking"""
+    booking_type = (booking_data.get('bookingType') or 
+                   booking_data.get('serviceType') or 
+                   booking_data.get('rentalType') or 
+                   booking_data.get('type') or '')
+    
+    # Convert to lowercase for comparison
+    booking_type_lower = booking_type.lower()
+    
+    self_drive_types = {
+        'selfdrive', 'self-drive', 'self drive',
+        'selfDriveCarRental', 'selfdrivecarrental',
+        'carRentalSelfDrive', 'carrentalselfdrive',
+        'self_drive', 'self_drive_car_rental'
+    }
+    
+    return booking_type_lower in self_drive_types
 
 def get_all_self_drive_bookings():
     """Fetch ALL self-drive bookings from pendingBooking"""
@@ -99,7 +114,15 @@ def get_all_self_drive_bookings():
                     booking_data['status'] = 'unassigned'
                 bookings.append(booking_data)
         
-        bookings.sort(key=lambda x: (x.get('pickupDate') or x.get('startDate') or x.get('date') or x.get('travelDate') or '', x.get('pickupTime') or x.get('time') or ''), reverse=True)
+        # Sort by pickUpDate (case-insensitive)
+        bookings.sort(
+            key=lambda x: (
+                x.get('pickUpDate') or x.get('pickupDate') or 
+                x.get('startDate') or x.get('date') or x.get('travelDate') or '',
+                x.get('pickUpTime') or x.get('pickupTime') or x.get('time') or ''
+            ),
+            reverse=True
+        )
         return bookings
         
     except Exception as e:
@@ -156,60 +179,172 @@ def get_booking_by_id(booking_id):
 
 def format_booking_response(booking):
     """Format booking data for API response"""
-    pickup_date = booking.get('pickupDate') or booking.get('startDate') or booking.get('date') or booking.get('travelDate') or ''
-    return_date = booking.get('returnDate') or booking.get('endDate') or ''
+    
+    # ============================================================
+    # FIX: Use consistent field names (handle both casing variations)
+    # ============================================================
+    
+    # Pickup fields - handle both casing
+    pickup_date = (booking.get('pickUpDate') or booking.get('pickupDate') or 
+                   booking.get('startDate') or booking.get('date') or 
+                   booking.get('travelDate') or '')
+    
+    pickup_time = (booking.get('pickUpTime') or booking.get('pickupTime') or 
+                   booking.get('time') or '')
+    
+    pickup_location = (booking.get('pickUpLocation') or booking.get('pickupLocation') or 
+                       booking.get('pickup') or '')
+    
+    # Return fields
+    return_date = (booking.get('returnDate') or booking.get('endDate') or '')
     return_date_time = booking.get('returnDateTime', '')
+    
     if not return_date and return_date_time:
         return_date = return_date_time.split(' at ')[0]
-    pickup_time = booking.get('pickupTime') or booking.get('time') or ''
-    pickup_location = booking.get('pickupLocation') or booking.get('pickup') or ''
-    return_location = booking.get('returnLocation') or booking.get('dropoffLocation') or booking.get('dropoff') or pickup_location
-    transport_unit = booking.get('transportUnit') or booking.get('transportUnitName') or booking.get('carType') or booking.get('vehicleType') or booking.get('vehicle') or 'N/A'
-    duration = booking.get('duration') or booking.get('rentalDuration') or booking.get('durationHours') or booking.get('hours') or 'N/A'
+    
+    return_location = (booking.get('returnLocation') or booking.get('dropoffLocation') or 
+                       booking.get('dropoff') or pickup_location)
+    
+    # Vehicle fields - handle both structures
+    transport_unit = (booking.get('transportUnit') or booking.get('transportUnitId') or 
+                      booking.get('transport_unit_id') or booking.get('carType') or 
+                      booking.get('vehicleType') or booking.get('vehicle') or 'N/A')
+    
+    car_type = (booking.get('carType') or booking.get('car_type') or 
+                booking.get('vehicleType') or transport_unit)
+    
+    vehicle_type = (booking.get('vehicleType') or booking.get('vehicle_type') or 
+                    booking.get('carType') or transport_unit)
+    
+    vehicle_color = (booking.get('vehicleColor') or booking.get('vehicle_color') or 
+                     booking.get('color') or '')
+    
+    # Duration fields
+    duration = (booking.get('duration') or booking.get('rentalDuration') or 
+                booking.get('rental_duration') or booking.get('durationHours') or 
+                booking.get('hours') or 'N/A')
+    
+    rental_duration = (booking.get('rentalDuration') or booking.get('rental_duration') or 
+                       booking.get('duration') or 'N/A')
+    
+    # Driver license
+    driver_license = (booking.get('driverLicenseNumber') or booking.get('driverLicense') or 
+                      booking.get('driver_license_number') or '')
+    
+    # Rate/package
+    rate_type = (booking.get('rateType') or booking.get('rate_type') or 
+                 booking.get('packageType') or booking.get('package_type') or '')
+    
+    package_type = (booking.get('packageType') or booking.get('package_type') or 
+                    booking.get('rateType') or '')
+    
+    # Delivery fee
+    delivery_fee = 0
+    try:
+        delivery_fee = float(booking.get('deliveryFee', 0)) if booking.get('deliveryFee') else 0
+    except (ValueError, TypeError):
+        delivery_fee = 0
+    
+    # Original amount
+    original_amount = None
+    try:
+        if booking.get('originalAmount'):
+            original_amount = float(booking.get('originalAmount'))
+        elif booking.get('originalPrice'):
+            original_amount = float(booking.get('originalPrice'))
+    except (ValueError, TypeError):
+        original_amount = None
+    
+    # Discount
+    discount_amount = 0
+    discount_type = ''
+    try:
+        discount_amount = float(booking.get('discountAmount', 0)) if booking.get('discountAmount') else 0
+        discount_type = booking.get('discountType', '')
+    except (ValueError, TypeError):
+        discount_amount = 0
+    
+    # Points
+    points_redeemed = booking.get('pointsRedeemed', 0)
+    points_discount = float(booking.get('pointsDiscount', 0)) if booking.get('pointsDiscount') else 0
+    
+    # Amount
+    amount = 0
+    try:
+        amount = float(booking.get('amount', 0))
+    except (ValueError, TypeError):
+        amount = 0
+    
     return {
         'id': booking.get('id'),
         'bookingType': booking.get('bookingType', SERVICE_TYPE),
         'clientName': booking.get('clientName', 'N/A'),
-        'clientId': booking.get('clientId'),
+        'clientId': booking.get('clientId', ''),
         'contactNumber': booking.get('contactNumber', 'N/A'),
         'email': booking.get('email', 'N/A'),
-        'amount': float(booking.get('amount', 0)),
-        'originalAmount': float(booking.get('originalAmount', 0)) if booking.get('originalAmount') else None,
+        'amount': amount,
+        'originalAmount': original_amount,
         'paymentStatus': booking.get('paymentStatus', 'pending'),
         'paymentMethod': booking.get('paymentMethod', 'N/A'),
         'status': booking.get('status', 'unassigned'),
+        
+        # ===== PICKUP INFO =====
         'date': pickup_date,
         'pickupDate': pickup_date,
-        'returnDate': return_date,
-        'returnDateTime': return_date_time,
-        'time': pickup_time,
         'pickupTime': pickup_time,
+        'time': pickup_time,
         'pickup': pickup_location,
         'pickupLocation': pickup_location,
-        'dropoff': return_location,
+        
+        # ===== RETURN INFO =====
+        'returnDate': return_date,
+        'returnDateTime': return_date_time,
         'returnLocation': return_location,
-        'packageType': booking.get('packageType', ''),
-        'rateType': booking.get('rateType', ''),
-        'duration': duration,
-        'rentalDuration': booking.get('rentalDuration', duration),
+        'dropoff': return_location,
+        
+        # ===== VEHICLE INFO =====
         'transportUnit': transport_unit,
-        'carType': booking.get('carType', transport_unit),
-        'vehicleType': transport_unit,
-        'driverLicenseNumber': booking.get('driverLicenseNumber', ''),
-        'deliveryFee': float(booking.get('deliveryFee', 0)) if booking.get('deliveryFee') else 0,
-        'pointsRedeemed': booking.get('pointsRedeemed', 0),
-        'pointsDiscount': float(booking.get('pointsDiscount', 0)),
+        'transportUnitId': booking.get('transportUnitId', ''),
+        'carType': car_type,
+        'vehicleType': vehicle_type,
+        'vehicleColor': vehicle_color,
+        
+        # ===== RENTAL DETAILS =====
+        'duration': duration,
+        'rentalDuration': rental_duration,
+        'driverLicenseNumber': driver_license,
+        'rateType': rate_type,
+        'packageType': package_type,
+        
+        # ===== PRICE BREAKDOWN =====
+        'deliveryFee': delivery_fee,
+        'discountAmount': discount_amount,
+        'discountType': discount_type,
+        
+        # ===== POINTS =====
+        'pointsRedeemed': points_redeemed,
+        'pointsDiscount': points_discount,
+        
+        # ===== NOTES =====
         'note': booking.get('note', ''),
+        
+        # ===== TIMESTAMPS =====
         'timestamp': booking.get('timestamp', ''),
         'paidAt': booking.get('paidAt', ''),
+        
+        # ===== ASSIGNMENT =====
         'assigned_driver': booking.get('assigned_driver'),
         'assigned_vehicle': booking.get('assigned_vehicle'),
         'assigned_at': booking.get('assigned_at'),
         'assigned_by': booking.get('assigned_by'),
         'assignment_notes': booking.get('assignment_notes'),
+        
+        # ===== COMPLETION =====
         'completed_at': booking.get('completed_at'),
         'completed_by': booking.get('completed_by'),
         'completion_notes': booking.get('completion_notes'),
+        
+        # ===== CANCELLATION =====
         'cancelled_at': booking.get('cancelled_at'),
         'cancelled_by': booking.get('cancelled_by'),
         'cancellation_reason': booking.get('cancellation_reason')
@@ -338,7 +473,7 @@ def assign_vehicle_to_self_drive_booking(booking_id):
         
         if not vehicle_data:
             return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
-        
+
         # Update the booking - change status to 'assigned'
         update_data = {
             'status': 'assigned',
@@ -453,20 +588,8 @@ def complete_self_drive_booking(booking_id):
 @role_required_api(['superadmin', 'admin'])
 @cached(timeout=60)
 def get_available_vehicles():
-    """Get all available vehicles, not currently assigned to active bookings"""
+    """Get all available vehicles."""
     try:
-        # Get current bookings to check which vehicles are already assigned
-        all_bookings = get_all_self_drive_bookings()
-        assigned_vehicle_ids = set()
-        
-        # Find vehicles currently assigned to active bookings
-        for booking in all_bookings:
-            status = booking.get('status')
-            if status in ['assigned', 'in_progress']:  # Active bookings
-                assigned_vehicle = booking.get('assigned_vehicle')
-                if assigned_vehicle and assigned_vehicle.get('id'):
-                    assigned_vehicle_ids.add(assigned_vehicle.get('id'))
-        
         units_ref = db.reference('transportUnits')
         all_units = units_ref.get()
         
@@ -477,12 +600,8 @@ def get_available_vehicles():
         
         for unit_id, unit_data in all_units.items():
             is_available = unit_data.get('isAvailable', True)
-            
-            # Check if vehicle is already assigned to an active booking
-            is_assigned = unit_id in assigned_vehicle_ids
-            
-            # Vehicle is available if: marked available AND not assigned to active booking
-            if is_available and not is_assigned:
+
+            if is_available:
                 available_vehicles.append({
                     'id': unit_id,
                     'vehicle_name': unit_data.get('transportUnit', 'N/A'),

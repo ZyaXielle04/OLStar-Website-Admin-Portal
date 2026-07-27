@@ -909,8 +909,8 @@ async function openAssignDriverModal(bookingId) {
             vehicleTypeHint.innerHTML = `(filtered by type: ${requiredVehicleType})`;
         }
         
-        await loadDrivers();
-        await loadVehiclesByType(requiredVehicleType.toLowerCase());
+        await loadDrivers(bookingId);
+        await loadVehiclesByType(requiredVehicleType.toLowerCase(), bookingId);
         
         MODAL_ELEMENTS.selectedBookingId.value = bookingId;
         MODAL_ELEMENTS.assignDriver.style.display = 'flex';
@@ -921,9 +921,11 @@ async function openAssignDriverModal(bookingId) {
     }
 }
 
-async function loadVehiclesByType(vehicleType) {
+async function loadVehiclesByType(vehicleType, bookingId = null) {
     try {
-        const response = await apiRequest(`/api/common/with-driver-metro/vehicles/available?type=${encodeURIComponent(vehicleType)}`);
+        const params = new URLSearchParams({ type: vehicleType });
+        if (bookingId) params.set('booking_id', bookingId);
+        const response = await apiRequest(`/api/common/with-driver-metro/vehicles/available?${params.toString()}`);
         const data = await response.json();
         
         if (data.success && data.vehicles && data.vehicles.length > 0) {
@@ -952,9 +954,10 @@ async function loadVehiclesByType(vehicleType) {
     }
 }
 
-async function loadDrivers() {
+async function loadDrivers(bookingId = null) {
     try {
-        const response = await apiRequest('/api/common/with-driver-metro/drivers/available');
+        const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : '';
+        const response = await apiRequest(`/api/common/with-driver-metro/drivers/available${query}`);
         const data = await response.json();
         
         if (data.success && data.drivers && data.drivers.length > 0) {
@@ -1126,8 +1129,8 @@ async function openReassignDriverModal(bookingId) {
         const booking = bookingData.booking;
         const requiredVehicleType = (booking.vehicleType || 'sedan').toLowerCase();
         
-        await loadDrivers();
-        await loadVehiclesForReassign(requiredVehicleType);
+        await loadDrivers(bookingId);
+        await loadVehiclesForReassign(requiredVehicleType, bookingId);
         
         MODAL_ELEMENTS.reassignBookingId.value = bookingId;
         MODAL_ELEMENTS.reassignReason.value = '';
@@ -1139,9 +1142,11 @@ async function openReassignDriverModal(bookingId) {
     }
 }
 
-async function loadVehiclesForReassign(vehicleType) {
+async function loadVehiclesForReassign(vehicleType, bookingId = null) {
     try {
-        const response = await apiRequest(`/api/common/with-driver-metro/vehicles/available?type=${encodeURIComponent(vehicleType)}`);
+        const params = new URLSearchParams({ type: vehicleType });
+        if (bookingId) params.set('booking_id', bookingId);
+        const response = await apiRequest(`/api/common/with-driver-metro/vehicles/available?${params.toString()}`);
         const data = await response.json();
         
         if (data.success && data.vehicles && data.vehicles.length > 0) {

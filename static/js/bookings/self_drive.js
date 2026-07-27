@@ -612,8 +612,10 @@ function renderBookingsCards() {
                 booking.clientName,
                 booking.contactNumber,
                 booking.email,
-                booking.pickup,
                 booking.pickupLocation,
+                booking.pickUpLocation,
+                booking.pickup,
+                booking.pickUp,
                 booking.returnLocation,
                 booking.transportUnit,
                 booking.vehicleType,
@@ -621,7 +623,7 @@ function renderBookingsCards() {
                 booking.rateType
             ];
             return searchableFields.some(field => 
-                field && field.toLowerCase().includes(currentSearchTerm)
+                field && String(field).toLowerCase().includes(currentSearchTerm)
             );
         });
     }
@@ -651,8 +653,11 @@ function renderBookingCard(booking) {
     const clientName = booking.clientName || 'N/A';
     const contactNumber = booking.contactNumber || 'N/A';
     const email = booking.email || 'N/A';
-    const pickup = booking.pickupLocation || booking.pickup || 'N/A';
-    const returnLocation = booking.returnLocation || booking.dropoff || pickup;
+    
+    // ✅ FIX: Use correct field names (try all variations)
+    const pickup = booking.pickupLocation || booking.pickUpLocation || booking.pickup || booking.pickUp || 'N/A';
+    const returnLocation = booking.returnLocation || booking.dropoffLocation || booking.dropoff || pickup;
+    
     const vehicleType = booking.carType || booking.transportUnit || booking.vehicleType || 'N/A';
     const duration = booking.rentalDuration || booking.duration || 'N/A';
     const rateType = booking.rateType || booking.packageType || 'N/A';
@@ -788,6 +793,11 @@ function renderBookingDetails(booking) {
     const returnDate = formatReadableDate(booking.returnDate);
     const amount = `PHP ${parseFloat(booking.amount || 0).toLocaleString()}`;
     const originalAmount = booking.originalAmount ? `PHP ${parseFloat(booking.originalAmount).toLocaleString()}` : null;
+    
+    // ✅ FIX: Use correct field names for modal
+    const pickupLocation = booking.pickupLocation || booking.pickUpLocation || booking.pickup || booking.pickUp || 'N/A';
+    const dropoffLocation = booking.returnLocation || booking.dropoffLocation || booking.dropoff || pickupLocation;
+    
     return `
         <div class="booking-details">
             <div class="details-section">
@@ -812,8 +822,8 @@ function renderBookingDetails(booking) {
             <div class="details-section">
                 <h4><i class="fas fa-route"></i> Rental Details</h4>
                 <div class="details-grid">
-                    <div class="detail-item"><label>Pickup Location:</label><span>${escapeHtml(booking.pickupLocation || booking.pickup || 'N/A')}</span></div>
-                    <div class="detail-item"><label>Dropoff Location:</label><span>${escapeHtml(booking.returnLocation || booking.dropoff || booking.pickupLocation || booking.pickup || 'N/A')}</span></div>
+                    <div class="detail-item"><label>Pickup Location:</label><span>${escapeHtml(pickupLocation)}</span></div>
+                    <div class="detail-item"><label>Dropoff Location:</label><span>${escapeHtml(dropoffLocation)}</span></div>
                     <div class="detail-item"><label>Pickup Date & Time:</label><span>${pickupDateTime}</span></div>
                     <div class="detail-item"><label>Return Date & Time:</label><span>${escapeHtml(booking.returnDateTime || returnDate)}</span></div>
                     <div class="detail-item"><label>Car Type:</label><span>${escapeHtml(booking.carType || booking.transportUnit || booking.vehicleType || 'N/A')}</span></div>
@@ -832,7 +842,7 @@ function renderBookingDetails(booking) {
 // Open assign vehicle modal
 async function openAssignDriverModal(bookingId) {
     try {
-        await loadVehicles();
+        await loadVehicles(bookingId);
         selectedBookingId.value = bookingId;
         assignDriverModal.style.display = 'flex';
     } catch (error) {
@@ -842,9 +852,10 @@ async function openAssignDriverModal(bookingId) {
 }
 
 // Load available vehicles
-async function loadVehicles() {
+async function loadVehicles(bookingId = null) {
     try {
-        const response = await apiRequest('/api/common/self-drive/vehicles/available');
+        const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : '';
+        const response = await apiRequest(`/api/common/self-drive/vehicles/available${query}`);
         const data = await response.json();
         
         if (data.success && data.vehicles && data.vehicles.length > 0) {

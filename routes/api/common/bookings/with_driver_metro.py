@@ -323,7 +323,7 @@ def assign_driver_to_metro_booking(booking_id):
         
         if not vehicle_data:
             return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
-        
+
         update_data = {
             'status': 'assigned',
             'assigned_driver': {
@@ -461,7 +461,7 @@ def reassign_metro_booking(booking_id):
         
         if not vehicle_data:
             return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
-        
+
         update_data = {
             'assigned_driver': {
                 'id': driver_id,
@@ -527,20 +527,9 @@ def get_available_drivers_metro():
 @role_required_api(['superadmin', 'admin'])
 @cached(timeout=60)
 def get_available_vehicles_metro():
-    """Get all available vehicles, optionally filtered by type and not currently assigned"""
+    """Get all available vehicles, optionally filtered by type."""
     try:
         vehicle_type = request.args.get('type', '').lower()
-        
-        all_bookings = get_all_metro_bookings()
-        assigned_vehicle_ids = set()
-        
-        for booking in all_bookings:
-            status = booking.get('status')
-            if status == 'assigned':
-                assigned_vehicle = booking.get('assigned_vehicle')
-                if assigned_vehicle and assigned_vehicle.get('id'):
-                    assigned_vehicle_ids.add(assigned_vehicle.get('id'))
-        
         units_ref = db.reference('transportUnits')
         all_units = units_ref.get()
         
@@ -552,9 +541,8 @@ def get_available_vehicles_metro():
         for unit_id, unit_data in all_units.items():
             is_available = unit_data.get('isAvailable', True)
             unit_type = unit_data.get('unitType', '').lower()
-            is_assigned = unit_id in assigned_vehicle_ids
             
-            if is_available and not is_assigned:
+            if is_available:
                 if vehicle_type and unit_type != vehicle_type:
                     continue
                     
