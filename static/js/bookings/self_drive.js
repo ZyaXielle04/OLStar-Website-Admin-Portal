@@ -403,7 +403,9 @@ function setupEventListeners() {
             // Update stats for this status
             const stats = calculateStatusStats(filteredByStatus);
             totalBookingsEl.textContent = filteredByStatus.length;
-            totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
+            if (totalRevenueEl) {
+                totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
+            }
             
             renderBookingsCards();
             restoreScrollPosition();
@@ -551,7 +553,9 @@ async function loadBookings(forceRefresh = false) {
             
             const stats = calculateStatusStats(filteredByStatus);
             todayBookingsEl.textContent = stats.todayCount;
-            totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
+            if (totalRevenueEl) {
+                totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
+            }
             
             updateStatusCounts();
             renderBookingsCards();
@@ -605,7 +609,9 @@ function updateStats() {
             .filter(b => b.paymentStatus === 'paid')
             .reduce((sum, b) => sum + parseFloat(b.amount || 0), 0);
     }
-    totalRevenueEl.textContent = `₱${totalRevenue.toLocaleString()}`;
+    if (totalRevenueEl) {
+        totalRevenueEl.textContent = `₱${totalRevenue.toLocaleString()}`;
+    }
 }
 
 // Update status counts in tabs

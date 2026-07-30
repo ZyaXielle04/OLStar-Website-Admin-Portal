@@ -563,7 +563,9 @@ function updateStats() {
     let totalRevenue = filteredByStatus
         .filter(b => b.paymentStatus === 'paid')
         .reduce((sum, b) => sum + parseFloat(b.amount || 0), 0);
-    DOM_ELEMENTS.totalRevenue.textContent = `₱${totalRevenue.toLocaleString()}`;
+    if (DOM_ELEMENTS.totalRevenue) {
+        DOM_ELEMENTS.totalRevenue.textContent = `₱${totalRevenue.toLocaleString()}`;
+    }
 }
 
 async function updateStatusCounts() {
