@@ -696,6 +696,56 @@ function filterByDate(booking) {
     }
 }
 
+// Sort cards by trip schedule: today first, then tomorrow/future, then past/missing dates.
+function parseBookingDateForSort(dateStr) {
+    const comparableDate = formatDateForComparison(dateStr);
+    if (!comparableDate) return null;
+
+    const date = new Date(`${comparableDate}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getBookingTimeForSort(timeStr) {
+    if (!timeStr) return '99:99';
+    const normalized = String(timeStr).trim();
+    const twelveHourMatch = normalized.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+
+    if (twelveHourMatch) {
+        let hours = parseInt(twelveHourMatch[1], 10);
+        const minutes = twelveHourMatch[2];
+        const meridiem = twelveHourMatch[3].toUpperCase();
+
+        if (meridiem === 'PM' && hours !== 12) hours += 12;
+        if (meridiem === 'AM' && hours === 12) hours = 0;
+
+        return `${String(hours).padStart(2, '0')}:${minutes}`;
+    }
+
+    return normalized.padStart(5, '0');
+}
+
+function sortBookingsByTripDate(bookings) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTime = today.getTime();
+
+    return [...bookings].sort((a, b) => {
+        const aDate = parseBookingDateForSort(a.date);
+        const bDate = parseBookingDateForSort(b.date);
+        const aTime = aDate ? aDate.getTime() : null;
+        const bTime = bDate ? bDate.getTime() : null;
+        const aGroup = aTime === null ? 2 : (aTime >= todayTime ? 0 : 1);
+        const bGroup = bTime === null ? 2 : (bTime >= todayTime ? 0 : 1);
+
+        if (aGroup !== bGroup) return aGroup - bGroup;
+        if (aTime !== bTime) {
+            return aGroup === 1 ? bTime - aTime : aTime - bTime;
+        }
+
+        return getBookingTimeForSort(a.time).localeCompare(getBookingTimeForSort(b.time));
+    });
+}
+
 // Render bookings as cards
 function renderBookingsCards() {
     let filteredBookings = allBookings.filter(b => {
@@ -721,6 +771,7 @@ function renderBookingsCards() {
     }
     
     filteredBookings = filteredBookings.filter(booking => filterByDate(booking));
+    filteredBookings = sortBookingsByTripDate(filteredBookings);
     
     resultsCount.textContent = filteredBookings.length;
     

@@ -668,6 +668,69 @@ function filterByDuration(booking) {
     }
 }
 
+// Sort cards by trip schedule: today first, then tomorrow/future, then past/missing dates.
+function normalizeBookingDateForSort(dateStr) {
+    if (!dateStr) return null;
+
+    if (dateStr.includes('-')) {
+        const parts = dateStr.split('-');
+        if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+            return `${parts[2]}-${parts[0]}-${parts[1]}`;
+        }
+    }
+
+    return dateStr;
+}
+
+function parseBookingDateForSort(dateStr) {
+    const comparableDate = normalizeBookingDateForSort(dateStr);
+    if (!comparableDate) return null;
+
+    const date = new Date(`${comparableDate}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getBookingTimeForSort(timeStr) {
+    if (!timeStr || timeStr === 'Flexible') return '99:99';
+    const normalized = String(timeStr).trim();
+    const twelveHourMatch = normalized.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+
+    if (twelveHourMatch) {
+        let hours = parseInt(twelveHourMatch[1], 10);
+        const minutes = twelveHourMatch[2];
+        const meridiem = twelveHourMatch[3].toUpperCase();
+
+        if (meridiem === 'PM' && hours !== 12) hours += 12;
+        if (meridiem === 'AM' && hours === 12) hours = 0;
+
+        return `${String(hours).padStart(2, '0')}:${minutes}`;
+    }
+
+    return normalized.padStart(5, '0');
+}
+
+function sortBookingsByTripDate(bookings) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTime = today.getTime();
+
+    return [...bookings].sort((a, b) => {
+        const aDate = parseBookingDateForSort(a.travelDate);
+        const bDate = parseBookingDateForSort(b.travelDate);
+        const aTime = aDate ? aDate.getTime() : null;
+        const bTime = bDate ? bDate.getTime() : null;
+        const aGroup = aTime === null ? 2 : (aTime >= todayTime ? 0 : 1);
+        const bGroup = bTime === null ? 2 : (bTime >= todayTime ? 0 : 1);
+
+        if (aGroup !== bGroup) return aGroup - bGroup;
+        if (aTime !== bTime) {
+            return aGroup === 1 ? bTime - aTime : aTime - bTime;
+        }
+
+        return getBookingTimeForSort(a.pickupTime).localeCompare(getBookingTimeForSort(b.pickupTime));
+    });
+}
+
 function renderBookingsCards() {
     let filteredBookings = allBookings.filter(b => {
         if (currentStatus === 'all') return true;
@@ -694,6 +757,7 @@ function renderBookingsCards() {
     filteredBookings = filteredBookings.filter(booking => filterByDestination(booking));
     filteredBookings = filteredBookings.filter(booking => filterByTripType(booking));
     filteredBookings = filteredBookings.filter(booking => filterByDuration(booking));
+    filteredBookings = sortBookingsByTripDate(filteredBookings);
     
     DOM_ELEMENTS.resultsCount.textContent = filteredBookings.length;
     
