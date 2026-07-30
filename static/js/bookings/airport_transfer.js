@@ -352,6 +352,7 @@ const todayBookingsEl = document.getElementById('todayBookings');
 const totalRevenueEl = document.getElementById('totalRevenue');
 const searchInput = document.getElementById('searchInput');
 const dateFilter = document.getElementById('dateFilter');
+const todayBookingsCard = document.getElementById('todayBookingsCard');
 const refreshBtn = document.getElementById('refreshBookingsBtn');
 const cardsContainer = document.getElementById('bookingsCardsContainer');
 const tableTitle = document.getElementById('tableTitle');
@@ -434,8 +435,17 @@ function setupEventListeners() {
     dateFilter.addEventListener('change', (e) => {
         saveScrollPosition();
         currentDateFilter = e.target.value;
+        updateTodayBookingsCardState();
         renderBookingsCards();
         restoreScrollPosition();
+    });
+
+    todayBookingsCard?.addEventListener('click', toggleTodayBookingsFilter);
+    todayBookingsCard?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleTodayBookingsFilter();
+        }
     });
 
     // Refresh button - force manual refresh
@@ -502,6 +512,24 @@ function setupEventListeners() {
     document.getElementById('completeBookingForm')?.addEventListener('submit', handleCompleteBooking);
 }
 
+function updateTodayBookingsCardState() {
+    if (!todayBookingsCard) return;
+    const isActive = currentDateFilter === 'today';
+    todayBookingsCard.classList.toggle('active', isActive);
+    todayBookingsCard.setAttribute('aria-pressed', String(isActive));
+}
+
+function toggleTodayBookingsFilter() {
+    saveScrollPosition();
+    currentDateFilter = currentDateFilter === 'today' ? 'all' : 'today';
+    if (dateFilter) {
+        dateFilter.value = currentDateFilter;
+    }
+    updateTodayBookingsCardState();
+    renderBookingsCards();
+    restoreScrollPosition();
+}
+
 // Update table title based on current status
 function updateTableTitle() {
     const titles = {
@@ -516,7 +544,7 @@ function updateTableTitle() {
 
 // Calculate stats for a filtered booking list
 function calculateStatusStats(bookings) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const todayCount = bookings.filter(b => {
         if (b.date) {
             const formattedDate = formatDateForComparison(b.date);
@@ -565,6 +593,7 @@ async function loadBookings(forceRefresh = false) {
             });
             
             const stats = calculateStatusStats(filteredByStatus);
+            totalBookingsEl.textContent = filteredByStatus.length;
             todayBookingsEl.textContent = stats.todayCount;
             if (totalRevenueEl) {
                 totalRevenueEl.textContent = `₱${stats.revenue.toLocaleString()}`;
@@ -605,7 +634,7 @@ function updateStats() {
     
     totalBookingsEl.textContent = filteredByStatus.length;
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const todayBookings = filteredByStatus.filter(booking => {
         const bookingDate = booking.date;
         if (bookingDate) {
@@ -657,6 +686,13 @@ function formatDateForComparison(dateStr) {
     return dateStr;
 }
 
+function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // Filter by date range
 function filterByDate(booking) {
     if (currentDateFilter === 'all') return true;
@@ -664,21 +700,19 @@ function filterByDate(booking) {
     const bookingDate = booking.date;
     if (!bookingDate) return false;
     
-    const [month, day, year] = bookingDate.split('-');
-    const bookingDateObj = new Date(year, month - 1, day);
+    const comparableDate = formatDateForComparison(bookingDate);
+    const bookingDateObj = new Date(`${comparableDate}T00:00:00`);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     switch(currentDateFilter) {
         case 'today':
-            const todayStr = formatDateForComparison(bookingDate);
-            return todayStr === new Date().toISOString().split('T')[0];
+            return comparableDate === getLocalDateString();
         case 'tomorrow':
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowStr = tomorrow.toISOString().split('T')[0];
-            const bookingDateStr = formatDateForComparison(bookingDate);
-            return bookingDateStr === tomorrowStr;
+            const tomorrowStr = getLocalDateString(tomorrow);
+            return comparableDate === tomorrowStr;
         case 'this_week':
             const weekStart = new Date(today);
             weekStart.setDate(today.getDate() - today.getDay());

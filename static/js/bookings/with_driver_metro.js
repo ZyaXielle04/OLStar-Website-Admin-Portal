@@ -331,6 +331,7 @@ const DOM_ELEMENTS = {
     totalRevenue: document.getElementById('totalRevenue'),
     searchInput: document.getElementById('searchInput'),
     dateFilter: document.getElementById('dateFilter'),
+    todayBookingsCard: document.getElementById('todayBookingsCard'),
     areaFilter: document.getElementById('areaFilter'),
     durationFilter: document.getElementById('durationFilter'),
     refreshBtn: document.getElementById('refreshBookingsBtn'),
@@ -397,8 +398,17 @@ function setupEventListeners() {
     DOM_ELEMENTS.dateFilter.addEventListener('change', (e) => {
         saveScrollPosition();
         currentDateFilter = e.target.value;
+        updateTodayBookingsCardState();
         renderBookingsCards();
         restoreScrollPosition();
+    });
+
+    DOM_ELEMENTS.todayBookingsCard?.addEventListener('click', toggleTodayBookingsFilter);
+    DOM_ELEMENTS.todayBookingsCard?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleTodayBookingsFilter();
+        }
     });
     
     DOM_ELEMENTS.areaFilter.addEventListener('change', (e) => {
@@ -475,6 +485,24 @@ function setupEventListeners() {
     document.getElementById('reassignDriverForm')?.addEventListener('submit', handleReassignDriver);
 }
 
+function updateTodayBookingsCardState() {
+    if (!DOM_ELEMENTS.todayBookingsCard) return;
+    const isActive = currentDateFilter === 'today';
+    DOM_ELEMENTS.todayBookingsCard.classList.toggle('active', isActive);
+    DOM_ELEMENTS.todayBookingsCard.setAttribute('aria-pressed', String(isActive));
+}
+
+function toggleTodayBookingsFilter() {
+    saveScrollPosition();
+    currentDateFilter = currentDateFilter === 'today' ? 'all' : 'today';
+    if (DOM_ELEMENTS.dateFilter) {
+        DOM_ELEMENTS.dateFilter.value = currentDateFilter;
+    }
+    updateTodayBookingsCardState();
+    renderBookingsCards();
+    restoreScrollPosition();
+}
+
 function updateTableTitle() {
     const titles = {
         'unassigned': 'Unassigned Metro Point-to-Point Bookings',
@@ -543,7 +571,7 @@ function updateStats() {
     
     DOM_ELEMENTS.totalBookings.textContent = filteredByStatus.length;
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const todayBookingsCount = filteredByStatus.filter(booking => {
         const bookingDate = booking.travelDate;
         if (bookingDate) {
@@ -585,6 +613,13 @@ async function updateStatusCounts() {
     }
 }
 
+function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function filterByDate(booking) {
     if (currentDateFilter === 'all') return true;
     
@@ -599,30 +634,31 @@ function filterByDate(booking) {
         }
     }
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
+    const todayObj = new Date(`${today}T00:00:00`);
     
     switch(currentDateFilter) {
         case 'today':
             return formattedDate === today;
         case 'tomorrow':
-            const tomorrow = new Date();
+            const tomorrow = new Date(todayObj);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            const tomorrowStr = getLocalDateString(tomorrow);
             return formattedDate === tomorrowStr;
         case 'this_week':
-            const bookingDateObj = new Date(formattedDate);
-            const todayObj = new Date(today);
+            const bookingDateObj = new Date(`${formattedDate}T00:00:00`);
             const weekStart = new Date(todayObj);
             weekStart.setDate(todayObj.getDate() - todayObj.getDay());
             const weekEnd = new Date(weekStart);
             weekEnd.setDate(weekStart.getDate() + 6);
             return bookingDateObj >= weekStart && bookingDateObj <= weekEnd;
         case 'next_week':
+            const nextWeekBookingDateObj = new Date(`${formattedDate}T00:00:00`);
             const nextWeekStart = new Date(todayObj);
             nextWeekStart.setDate(todayObj.getDate() + (7 - todayObj.getDay()));
             const nextWeekEnd = new Date(nextWeekStart);
             nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
-            return bookingDateObj >= nextWeekStart && bookingDateObj <= nextWeekEnd;
+            return nextWeekBookingDateObj >= nextWeekStart && nextWeekBookingDateObj <= nextWeekEnd;
         default:
             return true;
     }

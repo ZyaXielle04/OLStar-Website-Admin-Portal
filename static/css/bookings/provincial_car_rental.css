@@ -60,6 +60,20 @@
     border-color: #d1d5db;
 }
 
+.stat-card-clickable {
+    cursor: pointer;
+}
+
+.stat-card-clickable:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 3px;
+}
+
+.stat-card-clickable.active {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16), 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
 .stat-icon {
     width: 58px;
     height: 58px;
