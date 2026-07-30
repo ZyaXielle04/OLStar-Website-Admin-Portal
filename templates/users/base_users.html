@@ -44,6 +44,25 @@ User Management | {{ page_title }}
                     {{ page_title }}
                 </h3>
 
+                {% if user_type == "customers" %}
+                <div class="search-box">
+                    <i class="fas fa-search search-icon"></i>
+                    <input
+                        type="text"
+                        id="userSearchInput"
+                        class="search-input"
+                        placeholder="Search name or email">
+                    <button
+                        type="button"
+                        id="clearUserSearchBtn"
+                        class="clear-search-btn"
+                        aria-label="Clear search"
+                        style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                {% endif %}
+
             </div>
 
             {% if allow_add_user %}
@@ -73,6 +92,10 @@ User Management | {{ page_title }}
                         <th>Email</th>
 
                         <th>Role</th>
+
+                        {% if user_type == "customers" %}
+                        <th>Sign-in Method</th>
+                        {% endif %}
 
                         <th>Created At</th>
 

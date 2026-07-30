@@ -4,9 +4,13 @@ class UserManager {
     constructor(config) {
         this.apiType = config.apiType;
         this.tableBody = document.getElementById("usersTableBody");
+        this.searchInput = document.getElementById("userSearchInput");
+        this.clearSearchBtn = document.getElementById("clearUserSearchBtn");
         this.role = config.currentRole || this.getCurrentUserRole();
         this.mode = "create";
         this.currentEditId = null;
+        this.users = [];
+        this.searchTerm = "";
         
         // Property for transport units
         this.transportUnits = [];
@@ -69,6 +73,24 @@ class UserManager {
     bindEvents() {
         const btn = document.getElementById("addUserBtn");
         if (btn) btn.addEventListener("click", () => this.openCreate());
+
+        if (this.searchInput) {
+            this.searchInput.addEventListener("input", (event) => {
+                this.searchTerm = event.target.value.trim().toLowerCase();
+                this.toggleClearSearchButton();
+                this.render(this.getFilteredUsers());
+            });
+        }
+
+        if (this.clearSearchBtn) {
+            this.clearSearchBtn.addEventListener("click", () => {
+                this.searchTerm = "";
+                this.searchInput.value = "";
+                this.toggleClearSearchButton();
+                this.render(this.users);
+                this.searchInput.focus();
+            });
+        }
     }
 
     async loadUsers() {
@@ -78,19 +100,52 @@ class UserManager {
                 throw new Error("Failed to load users");
             }
             const data = await res.json();
-            this.render(data.users || []);
+            this.users = data.users || [];
+            this.render(this.getFilteredUsers());
         } catch (error) {
             console.error("Error loading users:", error);
             window.toastError("Failed to load users. Please refresh the page.");
         }
     }
 
+    getFilteredUsers() {
+        if (!this.searchTerm) return this.users;
+
+        return this.users.filter(user => {
+            const name = (user.fullName || "").toLowerCase();
+            const email = (user.email || "").toLowerCase();
+            return name.includes(this.searchTerm) || email.includes(this.searchTerm);
+        });
+    }
+
+    toggleClearSearchButton() {
+        if (!this.clearSearchBtn) return;
+        this.clearSearchBtn.style.display = this.searchTerm ? "flex" : "none";
+    }
+
     render(users) {
+        if (users.length === 0) {
+            const columnCount = this.apiType === "customer" ? 6 : 5;
+            const message = this.searchTerm
+                ? "No customers match your search."
+                : "No users found.";
+
+            this.tableBody.innerHTML = `
+                <tr>
+                    <td colspan="${columnCount}" class="empty-table-cell">${message}</td>
+                </tr>
+            `;
+            return;
+        }
+
         this.tableBody.innerHTML = users.map(u => `
             <tr>
                 <td>${this.escapeHtml(u.fullName)}</td>
                 <td>${this.escapeHtml(u.email)}</td>
                 <td>${this.escapeHtml(u.role)}</td>
+                ${this.apiType === "customer"
+                    ? `<td><span class="badge badge-auth">${this.escapeHtml(u.signInMethod || "Unknown")}</span></td>`
+                    : ''}
                 <td>${u.createdAt || '-'}</td>
                 <td>
                     ${this.canEdit()

@@ -234,6 +234,14 @@
     border: 1px solid #FDE68A;
 }
 
+.badge-auth {
+    background: #F3E8FF;
+    color: #6D28D9;
+    border: 1px solid #DDD6FE;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
 /* Action Buttons in Table */
 .action-buttons {
     display: flex;
@@ -485,6 +493,13 @@
 .clear-search-btn:hover {
     color: #DC2626;
     background: #FEF2F2;
+}
+
+.empty-table-cell {
+    text-align: center;
+    color: #64748B;
+    font-weight: 600;
+    padding: 2rem;
 }
 
 /* Responsive */
