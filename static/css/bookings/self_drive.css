@@ -526,6 +526,11 @@
     color: #2563eb;
 }
 
+.btn-refund-card {
+    background: #ccfbf1;
+    color: #0f766e;
+}
+
 .btn-cancel-card {
     background: #fee2e2;
     color: #dc2626;

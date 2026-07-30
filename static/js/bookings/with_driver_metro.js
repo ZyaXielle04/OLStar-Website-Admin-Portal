@@ -799,13 +799,14 @@ function renderBookingCard(booking) {
 
 function getCardActionButtons(booking) {
     const viewBtn = `<button class="card-action-btn btn-view-card" data-action="view" data-booking-id="${booking.id}">📄 View Details</button>`;
+    const refundBtn = `<button class="card-action-btn btn-refund-card" data-action="refund" data-booking-id="${booking.id}">💳 Refund</button>`;
     
     if (booking.status === 'unassigned') {
-        return `${viewBtn}<button class="card-action-btn btn-assign-card" data-action="assign" data-booking-id="${booking.id}">👨‍✈️ Assign Driver</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
+        return `${viewBtn}<button class="card-action-btn btn-assign-card" data-action="assign" data-booking-id="${booking.id}">👨‍✈️ Assign Driver</button>${refundBtn}<button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else if (booking.status === 'assigned') {
-        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete</button><button class="card-action-btn btn-reassign-card" data-action="reassign" data-booking-id="${booking.id}">🔄 Reassign Driver</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
+        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete</button><button class="card-action-btn btn-reassign-card" data-action="reassign" data-booking-id="${booking.id}">🔄 Reassign Driver</button>${refundBtn}<button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else {
-        return viewBtn;
+        return `${viewBtn}${refundBtn}`;
     }
 }
 
@@ -887,6 +888,9 @@ function attachCardActionListeners() {
     document.querySelectorAll('[data-action="reassign"]').forEach(btn => {
         btn.addEventListener('click', () => openReassignDriverModal(btn.dataset.bookingId));
     });
+    document.querySelectorAll('[data-action="refund"]').forEach(btn => {
+        btn.addEventListener('click', openRefundDevelopmentModal);
+    });
     document.querySelectorAll('.booking-color-marker').forEach(btn => {
         btn.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -905,6 +909,46 @@ function attachCardActionListeners() {
             btn.closest('.booking-color-picker')?.classList.remove('is-open');
         });
     });
+}
+
+// Show placeholder refund message
+function openRefundDevelopmentModal() {
+    const existingModal = document.getElementById('refundDevelopmentModal');
+    if (existingModal) {
+        existingModal.style.display = 'flex';
+        return;
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'refundDevelopmentModal';
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-credit-card"></i> Refund</h3>
+                <button class="modal-close" type="button" data-close-refund-modal>&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>This refund feature is still in development. Please process any refund requests through the current manual admin workflow for now.</p>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-primary" data-close-refund-modal>Got it</button>
+            </div>
+        </div>
+    `;
+
+    modal.querySelectorAll('[data-close-refund-modal]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+    });
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+    document.body.appendChild(modal);
 }
 
 async function viewBookingDetails(bookingId) {
