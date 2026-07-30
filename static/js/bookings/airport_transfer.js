@@ -360,17 +360,22 @@ const resultsCount = document.getElementById('resultsCount');
 // Modal elements
 const viewBookingModal = document.getElementById('viewBookingModal');
 const assignDriverModal = document.getElementById('assignDriverModal');
+const reassignDriverModal = document.getElementById('reassignDriverModal');
 const cancelBookingModal = document.getElementById('cancelBookingModal');
 const completeBookingModal = document.getElementById('completeBookingModal');
 const bookingDetailsContainer = document.getElementById('bookingDetailsContainer');
 const driverSelect = document.getElementById('driverSelect');
 const vehicleSelect = document.getElementById('vehicleSelect');
+const reassignDriverSelect = document.getElementById('reassignDriverSelect');
+const reassignVehicleSelect = document.getElementById('reassignVehicleSelect');
 const selectedBookingId = document.getElementById('selectedBookingId');
+const reassignBookingId = document.getElementById('reassignBookingId');
 const cancelBookingId = document.getElementById('cancelBookingId');
 const cancelReason = document.getElementById('cancelReason');
 const completeBookingId = document.getElementById('completeBookingId');
 const completionNotes = document.getElementById('completionNotes');
 const assignmentNotes = document.getElementById('assignmentNotes');
+const reassignReason = document.getElementById('reassignReason');
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', () => {
@@ -451,6 +456,9 @@ function setupEventListeners() {
     document.getElementById('closeAssignDriverModal')?.addEventListener('click', () => {
         assignDriverModal.style.display = 'none';
     });
+    document.getElementById('closeReassignDriverModal')?.addEventListener('click', () => {
+        reassignDriverModal.style.display = 'none';
+    });
     document.getElementById('closeCancelBookingModal')?.addEventListener('click', () => {
         cancelBookingModal.style.display = 'none';
     });
@@ -459,6 +467,9 @@ function setupEventListeners() {
     });
     document.getElementById('cancelAssignBtn')?.addEventListener('click', () => {
         assignDriverModal.style.display = 'none';
+    });
+    document.getElementById('cancelReassignBtn')?.addEventListener('click', () => {
+        reassignDriverModal.style.display = 'none';
     });
     document.getElementById('cancelBookingBtn')?.addEventListener('click', () => {
         cancelBookingModal.style.display = 'none';
@@ -486,6 +497,7 @@ function setupEventListeners() {
 
     // Form submissions
     document.getElementById('assignDriverForm')?.addEventListener('submit', handleAssignDriver);
+    document.getElementById('reassignDriverForm')?.addEventListener('submit', handleReassignDriver);
     document.getElementById('cancelBookingForm')?.addEventListener('submit', handleCancelBooking);
     document.getElementById('completeBookingForm')?.addEventListener('submit', handleCompleteBooking);
 }
@@ -813,7 +825,7 @@ function getCardActionButtons(booking) {
     if (booking.status === 'unassigned') {
         return `${viewBtn}<button class="card-action-btn btn-assign-card" data-action="assign" data-booking-id="${booking.id}">👨‍✈️ Assign Driver</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else if (booking.status === 'assigned') {
-        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
+        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete</button><button class="card-action-btn btn-reassign-card" data-action="reassign" data-booking-id="${booking.id}">🔄 Reassign Driver</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else {
         return viewBtn;
     }
@@ -866,6 +878,9 @@ function attachCardActionListeners() {
     });
     document.querySelectorAll('[data-action="assign"]').forEach(btn => {
         btn.addEventListener('click', () => openAssignDriverModal(btn.dataset.bookingId));
+    });
+    document.querySelectorAll('[data-action="reassign"]').forEach(btn => {
+        btn.addEventListener('click', () => openReassignDriverModal(btn.dataset.bookingId));
     });
     document.querySelectorAll('[data-action="cancel"]').forEach(btn => {
         btn.addEventListener('click', () => openCancelBookingModal(btn.dataset.bookingId));
@@ -1072,6 +1087,126 @@ async function handleAssignDriver(e) {
     } catch (error) {
         console.error('Error assigning driver:', error);
         toastError('Failed to assign driver', 'Error');
+    } finally {
+        submitBtn.innerHTML = originalBtnText;
+        submitBtn.disabled = false;
+    }
+}
+
+// Open reassign driver modal
+async function openReassignDriverModal(bookingId) {
+    try {
+        await loadDriversForReassign(bookingId);
+        await loadVehiclesForReassign(bookingId);
+        reassignBookingId.value = bookingId;
+        reassignReason.value = '';
+        reassignDriverModal.style.display = 'flex';
+    } catch (error) {
+        console.error('Error opening reassign modal:', error);
+        toastError('Failed to load reassignment options', 'Error');
+    }
+}
+
+// Load drivers for reassignment
+async function loadDriversForReassign(bookingId = null) {
+    try {
+        const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : '';
+        const response = await apiRequest(`/api/common/airport-transfer/drivers/available${query}`);
+        const data = await response.json();
+
+        if (data.success && data.drivers && data.drivers.length > 0) {
+            reassignDriverSelect.innerHTML = '<option value="">Choose Driver</option>';
+            data.drivers.forEach(driver => {
+                const option = document.createElement('option');
+                option.value = driver.id;
+                option.textContent = driver.name;
+                reassignDriverSelect.appendChild(option);
+            });
+        } else {
+            reassignDriverSelect.innerHTML = '<option value="">No drivers available</option>';
+            toastWarning('No drivers available for reassignment', 'Attention');
+        }
+    } catch (error) {
+        console.error('Error loading drivers for reassign:', error);
+        reassignDriverSelect.innerHTML = '<option value="">Error loading drivers</option>';
+        toastError('Failed to load drivers. Please try again.', 'Error');
+    }
+}
+
+// Load vehicles for reassignment
+async function loadVehiclesForReassign(bookingId = null) {
+    try {
+        const query = bookingId ? `?booking_id=${encodeURIComponent(bookingId)}` : '';
+        const response = await apiRequest(`/api/common/airport-transfer/vehicles/available${query}`);
+        const data = await response.json();
+
+        if (data.success && data.vehicles && data.vehicles.length > 0) {
+            reassignVehicleSelect.innerHTML = '<option value="">Choose Vehicle</option>';
+            data.vehicles.forEach(vehicle => {
+                const option = document.createElement('option');
+                option.value = vehicle.id;
+                option.textContent = `${vehicle.vehicle_name} - ${vehicle.plate_number}`;
+                reassignVehicleSelect.appendChild(option);
+            });
+        } else {
+            reassignVehicleSelect.innerHTML = '<option value="">No vehicles available</option>';
+            toastWarning('No vehicles available for reassignment', 'Attention');
+        }
+    } catch (error) {
+        console.error('Error loading vehicles for reassign:', error);
+        reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+        toastError('Failed to load vehicles. Please try again.', 'Error');
+    }
+}
+
+// Handle reassign driver
+async function handleReassignDriver(e) {
+    e.preventDefault();
+    const bookingId = reassignBookingId.value;
+    const driverId = reassignDriverSelect.value;
+    const vehicleId = reassignVehicleSelect.value;
+    const reason = reassignReason.value;
+
+    if (!driverId || !vehicleId) {
+        toastError('Please select both driver and vehicle', 'Validation Error');
+        return;
+    }
+
+    if (!reason) {
+        toastError('Please provide a reason for reassignment', 'Validation Error');
+        return;
+    }
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reassigning...';
+    submitBtn.disabled = true;
+
+    try {
+        const response = await apiRequest(`/api/common/airport-transfer/bookings/${bookingId}/reassign`, {
+            method: 'POST',
+            body: JSON.stringify({
+                driver_id: driverId,
+                vehicle_id: vehicleId,
+                reassign_reason: reason
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            toastSuccess('Driver reassigned successfully!', 'Reassignment Complete');
+            reassignDriverModal.style.display = 'none';
+            reassignReason.value = '';
+            reassignDriverSelect.value = '';
+            reassignVehicleSelect.value = '';
+            loadBookings(true);
+        } else {
+            toastError(data.message || 'Failed to reassign driver', 'Reassignment Failed');
+        }
+    } catch (error) {
+        console.error('Error reassigning driver:', error);
+        toastError('Failed to reassign driver', 'Error');
     } finally {
         submitBtn.innerHTML = originalBtnText;
         submitBtn.disabled = false;

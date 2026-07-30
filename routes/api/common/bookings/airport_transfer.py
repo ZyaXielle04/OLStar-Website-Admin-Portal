@@ -348,6 +348,80 @@ def assign_driver_to_airport_transfer(booking_id):
         print(f"Error assigning driver: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@airport_transfer_bp.route('/common/airport-transfer/bookings/<booking_id>/reassign', methods=['POST'])
+@login_required_api
+@role_required_api(['superadmin', 'admin'])
+def reassign_driver_to_airport_transfer(booking_id):
+    """Reassign a driver and vehicle to an assigned airport transfer booking."""
+    try:
+        data = request.get_json() or {}
+        driver_id = data.get('driver_id')
+        vehicle_id = data.get('vehicle_id')
+        reassign_reason = data.get('reassign_reason', '')
+
+        if not driver_id or not vehicle_id:
+            return jsonify({'success': False, 'message': 'Driver ID and Vehicle ID are required'}), 400
+
+        if not reassign_reason:
+            return jsonify({'success': False, 'message': 'Reassignment reason is required'}), 400
+
+        booking_ref = db.reference(f'/pendingBooking/{booking_id}')
+        booking_data = booking_ref.get()
+
+        if not booking_data:
+            return jsonify({'success': False, 'message': 'Booking not found'}), 404
+
+        if booking_data.get('bookingType') != SERVICE_TYPE:
+            return jsonify({'success': False, 'message': 'Not an airport transfer booking'}), 400
+
+        if booking_data.get('status') != 'assigned':
+            return jsonify({'success': False, 'message': 'Only assigned bookings can be reassigned'}), 400
+
+        driver_ref = db.reference(f'users/{driver_id}')
+        driver_data = driver_ref.get()
+
+        if not driver_data:
+            return jsonify({'success': False, 'message': 'Driver not found'}), 404
+
+        vehicle_ref = db.reference(f'transportUnits/{vehicle_id}')
+        vehicle_data = vehicle_ref.get()
+
+        if not vehicle_data:
+            return jsonify({'success': False, 'message': 'Vehicle not found'}), 404
+
+        update_data = {
+            'assigned_driver': {
+                'id': driver_id,
+                'name': driver_data.get('fullName', 'N/A'),
+                'contact': driver_data.get('contactNumber', 'N/A'),
+                'license_number': driver_data.get('licenseNumber', 'No License')
+            },
+            'assigned_vehicle': {
+                'id': vehicle_id,
+                'name': vehicle_data.get('transportUnit', 'N/A'),
+                'plate_number': vehicle_data.get('plateNumber', 'N/A'),
+                'type': vehicle_data.get('unitType', 'N/A'),
+                'color': vehicle_data.get('color', 'N/A')
+            },
+            'previous_assignment': {
+                'driver': booking_data.get('assigned_driver'),
+                'vehicle': booking_data.get('assigned_vehicle')
+            },
+            'reassign_reason': reassign_reason,
+            'reassigned_by': session.get('user_id'),
+            'reassigned_by_name': session.get('display_name', session.get('email')),
+            'reassigned_at': datetime.now(PH_TIMEZONE).isoformat()
+        }
+
+        booking_ref.update(update_data)
+        invalidate_cache()
+
+        return jsonify({'success': True, 'message': 'Driver reassigned successfully'}), 200
+
+    except Exception as e:
+        print(f"Error reassigning driver: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @airport_transfer_bp.route('/common/airport-transfer/bookings/<booking_id>/color', methods=['PATCH'])
 @login_required_api
 @role_required_api(['superadmin', 'admin'])

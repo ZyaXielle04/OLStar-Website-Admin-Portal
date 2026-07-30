@@ -794,7 +794,7 @@ function getCardActionButtons(booking) {
     if (booking.status === 'unassigned') {
         return `${viewBtn}<button class="card-action-btn btn-assign-card" data-action="assign" data-booking-id="${booking.id}">👨‍✈️ Assign Driver</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else if (booking.status === 'assigned') {
-        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete</button><button class="card-action-btn btn-reassign-card" data-action="reassign" data-booking-id="${booking.id}">🔄 Reassign</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
+        return `${viewBtn}<button class="card-action-btn btn-complete-card" data-action="complete" data-booking-id="${booking.id}">✅ Complete</button><button class="card-action-btn btn-reassign-card" data-action="reassign" data-booking-id="${booking.id}">🔄 Reassign Driver</button><button class="card-action-btn btn-cancel-card" data-action="cancel" data-booking-id="${booking.id}">🗑️ Cancel</button>`;
     } else {
         return viewBtn;
     }

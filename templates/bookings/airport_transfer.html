@@ -221,6 +221,58 @@
     </div>
 </div>
 
+<!-- REASSIGN DRIVER MODAL -->
+<div id="reassignDriverModal" class="modal-overlay" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>
+                <i class="fas fa-retweet"></i>
+                Reassign Driver
+            </h3>
+            <button class="modal-close" id="closeReassignDriverModal">
+                &times;
+            </button>
+        </div>
+        <form id="reassignDriverForm">
+            <input type="hidden" id="reassignBookingId">
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-user"></i>
+                    Select Driver
+                </label>
+                <select id="reassignDriverSelect" class="form-select" required>
+                    <option value="">Choose Driver</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-truck"></i>
+                    Assign Vehicle
+                </label>
+                <select id="reassignVehicleSelect" class="form-select" required>
+                    <option value="">Choose Vehicle</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-comment"></i>
+                    Reassignment Reason
+                </label>
+                <textarea id="reassignReason" class="form-textarea" rows="4" placeholder="Enter reason for reassignment..." required></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn btn-secondary" id="cancelReassignBtn">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-retweet"></i>
+                    Reassign Driver
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- CANCEL BOOKING MODAL -->
 <div id="cancelBookingModal" class="modal-overlay" style="display: none;">
     <div class="modal">

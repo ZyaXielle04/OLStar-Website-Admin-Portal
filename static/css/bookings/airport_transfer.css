@@ -615,6 +615,11 @@
     color: #2563eb;
 }
 
+.btn-reassign-card {
+    background: #fef3c7;
+    color: #d97706;
+}
+
 .btn-cancel-card {
     background: #fee2e2;
     color: #dc2626;
