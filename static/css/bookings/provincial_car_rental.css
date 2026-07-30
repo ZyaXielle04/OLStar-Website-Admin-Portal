@@ -34,6 +34,20 @@
     font-size: 0.95rem;
 }
 
+.dashboard-header .timezone-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: fit-content;
+    margin-top: 0.35rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1e40af;
+    font-weight: 600;
+}
+
 /* ============================================
    STATS
 ============================================ */

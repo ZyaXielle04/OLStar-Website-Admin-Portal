@@ -1,5 +1,19 @@
 /* static/css/bookings/with_driver_metro.css - continued */
 
+.dashboard-header .timezone-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: fit-content;
+    margin-top: 0.35rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1e40af;
+    font-weight: 600;
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
