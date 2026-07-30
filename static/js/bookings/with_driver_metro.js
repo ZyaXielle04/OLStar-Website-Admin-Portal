@@ -1183,6 +1183,82 @@ async function openAssignDriverModal(bookingId) {
     }
 }
 
+function enhanceSearchableSelect(selectEl, placeholder) {
+    if (!selectEl) return;
+
+    const optionItems = Array.from(selectEl.options).slice(1).sort((a, b) =>
+        a.textContent.localeCompare(b.textContent, undefined, { sensitivity: 'base' })
+    );
+    optionItems.forEach(option => selectEl.appendChild(option));
+
+    let wrapper = selectEl.nextElementSibling;
+    if (!wrapper || !wrapper.classList.contains('searchable-select')) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'searchable-select';
+        wrapper.innerHTML = `
+            <input type="text" class="searchable-select-input" autocomplete="off">
+            <div class="searchable-select-options"></div>
+        `;
+        selectEl.insertAdjacentElement('afterend', wrapper);
+    }
+
+    const input = wrapper.querySelector('.searchable-select-input');
+    const optionsList = wrapper.querySelector('.searchable-select-options');
+    selectEl.classList.add('searchable-select-source');
+    selectEl.required = false;
+    input.placeholder = placeholder;
+    input.value = selectEl.value ? selectEl.options[selectEl.selectedIndex]?.textContent || '' : '';
+
+    const getOptions = () => Array.from(selectEl.options).slice(1);
+    const closeOptions = () => optionsList.classList.remove('is-open');
+    const renderOptions = (filter = '') => {
+        const normalizedFilter = filter.trim().toLowerCase();
+        const matches = getOptions().filter(option =>
+            option.textContent.toLowerCase().includes(normalizedFilter)
+        );
+
+        optionsList.innerHTML = '';
+        if (matches.length === 0) {
+            optionsList.innerHTML = '<div class="searchable-select-empty">No matches found</div>';
+        } else {
+            matches.forEach(option => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'searchable-select-option';
+                item.textContent = option.textContent;
+                item.addEventListener('mousedown', event => {
+                    event.preventDefault();
+                    selectEl.value = option.value;
+                    input.value = option.textContent;
+                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    closeOptions();
+                });
+                optionsList.appendChild(item);
+            });
+        }
+        optionsList.classList.add('is-open');
+    };
+
+    input.onfocus = () => renderOptions(input.value);
+    input.oninput = () => {
+        const exactMatch = getOptions().find(option =>
+            option.textContent.toLowerCase() === input.value.trim().toLowerCase()
+        );
+        selectEl.value = exactMatch ? exactMatch.value : '';
+        renderOptions(input.value);
+    };
+    input.onkeydown = event => {
+        if (event.key === 'Escape') closeOptions();
+    };
+
+    if (!wrapper.dataset.searchableSelectReady) {
+        document.addEventListener('mousedown', event => {
+            if (!wrapper.contains(event.target)) closeOptions();
+        });
+        wrapper.dataset.searchableSelectReady = 'true';
+    }
+}
+
 async function loadVehiclesByType(vehicleType, bookingId = null) {
     try {
         const params = new URLSearchParams({ type: vehicleType });
@@ -1208,10 +1284,14 @@ async function loadVehiclesByType(vehicleType, bookingId = null) {
             MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
             toastWarning(`No ${vehicleType} vehicles available for assignment`, 'Vehicle Unavailable');
         }
+        enhanceSearchableSelect(MODAL_ELEMENTS.vehicleSelect, 'Search vehicle...');
+        enhanceSearchableSelect(MODAL_ELEMENTS.reassignVehicleSelect, 'Search vehicle...');
     } catch (error) {
         console.error('Error loading vehicles:', error);
         MODAL_ELEMENTS.vehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
         MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+        enhanceSearchableSelect(MODAL_ELEMENTS.vehicleSelect, 'Search vehicle...');
+        enhanceSearchableSelect(MODAL_ELEMENTS.reassignVehicleSelect, 'Search vehicle...');
         toastError('Failed to load vehicles. Please try again.', 'Error');
     }
 }
@@ -1240,10 +1320,14 @@ async function loadDrivers(bookingId = null) {
             MODAL_ELEMENTS.reassignDriverSelect.innerHTML = '<option value="">No drivers available</option>';
             toastWarning('No drivers available for assignment', 'Attention');
         }
+        enhanceSearchableSelect(MODAL_ELEMENTS.driverSelect, 'Search driver...');
+        enhanceSearchableSelect(MODAL_ELEMENTS.reassignDriverSelect, 'Search driver...');
     } catch (error) {
         console.error('Error loading drivers:', error);
         MODAL_ELEMENTS.driverSelect.innerHTML = '<option value="">Error loading drivers</option>';
         MODAL_ELEMENTS.reassignDriverSelect.innerHTML = '<option value="">Error loading drivers</option>';
+        enhanceSearchableSelect(MODAL_ELEMENTS.driverSelect, 'Search driver...');
+        enhanceSearchableSelect(MODAL_ELEMENTS.reassignDriverSelect, 'Search driver...');
         toastError('Failed to load drivers. Please try again.', 'Error');
     }
 }
@@ -1423,9 +1507,11 @@ async function loadVehiclesForReassign(vehicleType, bookingId = null) {
             MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = `<option value="">No ${vehicleType} vehicles available</option>`;
             toastWarning(`No ${vehicleType} vehicles available for reassignment`, 'Vehicle Unavailable');
         }
+        enhanceSearchableSelect(MODAL_ELEMENTS.reassignVehicleSelect, 'Search vehicle...');
     } catch (error) {
         console.error('Error loading vehicles for reassign:', error);
         MODAL_ELEMENTS.reassignVehicleSelect.innerHTML = '<option value="">Error loading vehicles</option>';
+        enhanceSearchableSelect(MODAL_ELEMENTS.reassignVehicleSelect, 'Search vehicle...');
     }
 }
 
